@@ -1,0 +1,22 @@
+# Render.com blueprint — deploy BRICK backend without Docker
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: brick-api
+    runtime: go
+    rootDir: backend
+    buildCommand: go build -buildvcs=false -o brick .
+    startCommand: ./brick
+    envVars:
+      - key: BRICK_LEDGER_MODE
+        value: cloud
+      - key: BRICK_LEDGER_DATA
+        value: /data/cloud-ledger.json
+      - key: SERVER_PORT
+        value: "8080"
+      - key: JWT_SECRET
+        generateValue: true
+    disk:
+      name: brick-ledger
+      mountPath: /data
+      sizeGB: 1

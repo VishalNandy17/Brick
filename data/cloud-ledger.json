@@ -1,0 +1,82 @@
+{
+  "identities": {
+    "identity_Org1MSP_admin": {
+      "userId": "admin",
+      "orgId": "Org1MSP",
+      "role": "admin",
+      "status": "active",
+      "identityHash": "d0a938b8fa94d8bf3d82a43ccba01d6b0ef0fd38d44da5f616b5fcf3da3b1990",
+      "mspId": "Org1MSP",
+      "attributes": {
+        "brick-admin": "true"
+      },
+      "createdAt": "2026-07-18T12:08:09Z",
+      "updatedAt": "2026-07-18T12:08:09Z"
+    },
+    "identity_Org1MSP_alice": {
+      "userId": "alice",
+      "orgId": "Org1MSP",
+      "role": "user",
+      "status": "active",
+      "identityHash": "6e74d6268feef649220e6c8d1287db38dd02a42f19a875e72043833913fe58a9",
+      "mspId": "Org1MSP",
+      "attributes": {
+        "brick-admin": "false"
+      },
+      "createdAt": "2026-07-18T12:08:25Z",
+      "updatedAt": "2026-07-18T12:08:25Z"
+    }
+  },
+  "assets": {},
+  "history": {
+    "identity_Org1MSP_admin": [
+      {
+        "timestamp": "2026-07-18T12:08:09Z",
+        "value": {
+          "userId": "admin",
+          "orgId": "Org1MSP",
+          "role": "admin",
+          "status": "active",
+          "identityHash": "d0a938b8fa94d8bf3d82a43ccba01d6b0ef0fd38d44da5f616b5fcf3da3b1990",
+          "mspId": "Org1MSP",
+          "attributes": {
+            "brick-admin": "true"
+          },
+          "createdAt": "2026-07-18T12:08:09Z",
+          "updatedAt": "2026-07-18T12:08:09Z"
+        },
+        "txid": "genesis"
+      }
+    ],
+    "identity_Org1MSP_alice": [
+      {
+        "timestamp": "2026-07-18T12:08:25Z",
+        "value": {
+          "userId": "alice",
+          "orgId": "Org1MSP",
+          "role": "user",
+          "status": "active",
+          "identityHash": "6e74d6268feef649220e6c8d1287db38dd02a42f19a875e72043833913fe58a9",
+          "mspId": "Org1MSP",
+          "attributes": {
+            "brick-admin": "false"
+          },
+          "createdAt": "2026-07-18T12:08:25Z",
+          "updatedAt": "2026-07-18T12:08:25Z"
+        },
+        "txid": "tx_1784376505598633900"
+      }
+    ]
+  },
+  "events": [
+    {
+      "type": "IdentityRegistered",
+      "payload": {
+        "orgId": "Org1MSP",
+        "role": "user",
+        "userId": "alice"
+      },
+      "timestamp": "2026-07-18T12:08:25.5986339Z"
+    }
+  ]
+}

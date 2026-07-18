@@ -1,0 +1,30 @@
+{
+  "mode": "cloud",
+  "description": "BRICK cloud ledger profile — no local Docker or Fabric certs required",
+  "peerHost": "cloud.brick.local",
+  "peerPort": 443,
+  "peerAddress": "cloud.brick.local:443",
+  "tlsEnabled": true,
+  "tlsCertPath": "",
+  "certPath": "",
+  "keyPath": "",
+  "orgName": "Org1",
+  "orgMspId": "Org1MSP",
+  "channelName": "mychannel",
+  "chaincodeName": "brick-identity",
+  "ledgerDataPath": "./data/cloud-ledger.json",
+  "upgradePaths": [
+    {
+      "name": "IBM Blockchain Platform",
+      "url": "https://www.ibm.com/products/blockchain-platform"
+    },
+    {
+      "name": "Kaleido",
+      "url": "https://www.kaleido.io/"
+    },
+    {
+      "name": "Play with Docker Fabric",
+      "url": "https://labs.play-with-docker.com/"
+    }
+  ]
+}

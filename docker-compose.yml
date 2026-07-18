@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  brick-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: brick-backend
+    environment:
+      - SERVER_PORT=8080
+      - BRICK_LEDGER_MODE=cloud
+      - BRICK_LEDGER_DATA=/app/data/cloud-ledger.json
+      - CONNECTION_PROFILE=/app/connection-cloud.json
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    networks:
+      - brick-network
+    restart: unless-stopped
+
+  brick-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    container_name: brick-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - brick-backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    networks:
+      - brick-network
+    restart: unless-stopped
+
+networks:
+  brick-network:
+    driver: bridge

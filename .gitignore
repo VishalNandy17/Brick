@@ -1,0 +1,28 @@
+# Build artifacts
+backend/brick.exe
+backend/brick-server
+backend/brick
+tmp/
+data/brick.db
+
+# Dependencies
+frontend/node_modules/
+frontend/.next/
+frontend/.output/
+frontend/.tanstack/
+frontend/.lovable/
+node_modules/
+
+# Environment
+.env
+.env.production
+.env.local
+backend/.env
+backend/.env.production
+backend/.env.local
+frontend/.env
+frontend/.env.local
+
+# OS
+.DS_Store
+Thumbs.db

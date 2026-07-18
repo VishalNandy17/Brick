@@ -1,0 +1,30 @@
+# Backend Dockerfile — cloud ledger mode (no Fabric network required)
+FROM golang:1.21 AS builder
+
+WORKDIR /app
+
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+COPY backend/ .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -buildvcs=false -a -installsuffix cgo -o brick-server .
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+COPY --from=builder /app/brick-server .
+COPY data/cloud-ledger.json ./data/cloud-ledger.json
+COPY connection-cloud.json ./connection-cloud.json
+
+ENV SERVER_PORT=8080
+ENV BRICK_LEDGER_MODE=cloud
+ENV BRICK_LEDGER_DATA=/app/data/cloud-ledger.json
+ENV CONNECTION_PROFILE=/app/connection-cloud.json
+
+EXPOSE 8080
+
+CMD ["./brick-server"]

@@ -1,0 +1,15 @@
+{
+  "peerHost": "localhost",
+  "peerPort": 7051,
+  "peerAddress": "localhost:7051",
+  "tlsCertPath": "./certs/peer0.org1.example.com-cert.pem",
+  "certPath": "./certs/Admin@org1.example.com-cert.pem",
+  "keyPath": "./certs/priv_sk",
+  "orgName": "Org1",
+  "orgMspId": "Org1MSP",
+  "channelName": "mychannel",
+  "chaincodeName": "brick-identity",
+  "caHost": "localhost",
+  "caPort": 7054,
+  "tlsEnabled": true
+}
