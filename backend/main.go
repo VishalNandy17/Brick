@@ -49,6 +49,7 @@ func main() {
 
 	// ── Router ──────────────────────────────────────────────────────────
 	router := gin.Default()
+	_ = router.SetTrustedProxies(nil)
 	router.Use(middleware.ErrorRecoveryMiddleware())
 	router.Use(middleware.SecurityHeadersMiddleware())
 	router.Use(middleware.CORSMiddleware())
@@ -61,8 +62,9 @@ func main() {
 	// ── Auth Routes (OTP + JWT) — Public ─────────────────────────────────────────────
 	authGroup := router.Group("/api/v1/auth")
 	{
-		authGroup.POST("/request-otp", handlers.RequestOTP)
-		authGroup.POST("/verify-otp", handlers.VerifyOTP)
+		authGroup.POST("/request-otp", handlers.RequestOTP)   // Signup: send email OTP
+		authGroup.POST("/verify-otp", handlers.VerifyOTP)     // Signup: verify OTP + set password
+		authGroup.POST("/login", handlers.LoginWithPassword)   // Login: email + password
 		authGroup.POST("/refresh", handlers.RefreshTokenHandler) // silent token renewal
 	}
 
@@ -78,11 +80,18 @@ func main() {
 	userGroup := router.Group("/api/users")
 	userGroup.Use(middleware.BrickAuthMiddleware()) // upgraded: JWT + ledger revocation check
 	{
+		userGroup.GET("/me", handlers.GetMe)
 		userGroup.GET("", handlers.GetUsers)
 		userGroup.POST("", handlers.CreateUser)
 		userGroup.GET("/:id", handlers.GetUserByID)
 		userGroup.PUT("/:id", handlers.UpdateUser)
 		userGroup.DELETE("/:id", handlers.DeleteUser)
+	}
+
+	v1Users := router.Group("/api/v1/users")
+	v1Users.Use(middleware.BrickAuthMiddleware())
+	{
+		v1Users.GET("/me", handlers.GetMe)
 	}
 
 	// ── Transaction Routes (BrickAuth-protected) ───────────────────────────────
@@ -107,6 +116,15 @@ func main() {
 	adminGroup.Use(middleware.BrickAuthMiddleware(), middleware.AdminGuard())
 	{
 		adminGroup.POST("/revoke-session", handlers.RevokeSession)
+	}
+
+	// ── Application (Developer Dashboard) Routes ────────────────────────────
+	appsGroup := router.Group("/api/v1/apps")
+	appsGroup.Use(middleware.BrickAuthMiddleware())
+	{
+		appsGroup.POST("", handlers.CreateApplication)
+		appsGroup.GET("", handlers.GetApplications)
+		appsGroup.GET("/:id", handlers.GetApplicationByID)
 	}
 
 	port := cfg.ServerPort

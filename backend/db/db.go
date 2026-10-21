@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
@@ -29,6 +30,7 @@ func Connect() {
 		&models.User{},
 		&models.OTPRecord{},
 		&models.RefreshToken{},
+		&models.Application{},
 	); err != nil {
 		log.Fatalf("❌ Database migration failed: %v", err)
 	}
@@ -87,8 +89,17 @@ func mustSQLite() *gorm.DB {
 }
 
 func gormConfig() *gorm.Config {
+	newLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		logger.Config{
+			SlowThreshold:             1500 * time.Millisecond, // 1.5s threshold for remote cloud database
+			LogLevel:                  logger.Warn,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  true,
+		},
+	)
 	return &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: newLogger,
 	}
 }
 

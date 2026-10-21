@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -72,6 +73,11 @@ func NewCloudLedger(dataPath string) (*CloudLedger, error) {
 func (cl *CloudLedger) Mode() string   { return "cloud" }
 func (cl *CloudLedger) Healthy() bool  { return true }
 
+func normalizeOrg(org string) string {
+	org = strings.TrimSpace(org)
+	return strings.TrimSuffix(org, "MSP")
+}
+
 func (cl *CloudLedger) RegisterIdentity(req RegistrationRequest) (*Identity, error) {
 	if !req.Caller.IsAdmin {
 		return nil, fmt.Errorf("caller lacks brick-admin attribute for identity registration")
@@ -86,7 +92,7 @@ func (cl *CloudLedger) RegisterIdentity(req RegistrationRequest) (*Identity, err
 	if callerMSPID == "" {
 		callerMSPID = req.OrgID
 	}
-	if req.OrgID != callerMSPID {
+	if !req.Caller.IsAdmin && normalizeOrg(req.OrgID) != normalizeOrg(callerMSPID) {
 		return nil, fmt.Errorf("organization mismatch: requested %s, caller MSP %s", req.OrgID, callerMSPID)
 	}
 
@@ -94,8 +100,12 @@ func (cl *CloudLedger) RegisterIdentity(req RegistrationRequest) (*Identity, err
 	defer cl.mu.Unlock()
 
 	key := identityKey(req.OrgID, req.UserID)
-	if _, exists := cl.state.Identities[key]; exists {
-		return nil, fmt.Errorf("identity already exists: %s", key)
+	if existing, exists := cl.state.Identities[key]; exists {
+		return existing, nil
+	}
+	keyMSP := identityKey(normalizeOrg(req.OrgID)+"MSP", req.UserID)
+	if existing, exists := cl.state.Identities[keyMSP]; exists {
+		return existing, nil
 	}
 
 	now := time.Now().UTC()
@@ -142,7 +152,7 @@ func (cl *CloudLedger) GetIdentity(orgID, userID string, caller CallerContext) (
 	if callerMSPID == "" {
 		callerMSPID = caller.OrgID
 	}
-	if orgID != callerMSPID {
+	if !caller.IsAdmin && normalizeOrg(orgID) != normalizeOrg(callerMSPID) {
 		return nil, fmt.Errorf("unauthorized: caller MSP %s cannot access org %s", callerMSPID, orgID)
 	}
 
@@ -151,6 +161,10 @@ func (cl *CloudLedger) GetIdentity(orgID, userID string, caller CallerContext) (
 
 	key := identityKey(orgID, userID)
 	identity, ok := cl.state.Identities[key]
+	if !ok {
+		keyMSP := identityKey(normalizeOrg(orgID)+"MSP", userID)
+		identity, ok = cl.state.Identities[keyMSP]
+	}
 	if !ok {
 		return nil, fmt.Errorf("identity not found: %s", key)
 	}

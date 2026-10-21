@@ -25,25 +25,100 @@
       },
       "createdAt": "2026-07-18T12:08:25Z",
       "updatedAt": "2026-07-18T12:08:25Z"
+    },
+    "identity_Org1_usr_0bf70ccfa772cb1a": {
+      "userId": "usr_0bf70ccfa772cb1a",
+      "orgId": "Org1",
+      "role": "user",
+      "status": "active",
+      "identityHash": "b2cad31e963bbe2ae5bf1e9a8f0e2022922bf67b8cb73ebe65518e17952d3816",
+      "mspId": "Org1",
+      "attributes": {
+        "email": "nandyvishal17@gmail.com"
+      },
+      "createdAt": "2026-10-21T19:21:26Z",
+      "updatedAt": "2026-10-21T19:21:26Z"
+    },
+    "identity_Org2_usr_1ae3d34bbdf94e1a": {
+      "userId": "usr_1ae3d34bbdf94e1a",
+      "orgId": "Org2",
+      "role": "user",
+      "status": "active",
+      "identityHash": "5ba2ab2c003378544966d2f5ecf7ba687a339aafd5cb4fa19f09e8e4c56d8ebb",
+      "mspId": "Org2",
+      "attributes": {
+        "email": "born2cde@gmail.com"
+      },
+      "createdAt": "2026-10-21T19:29:08Z",
+      "updatedAt": "2026-10-21T19:29:08Z"
     }
   },
-  "assets": {},
+  "assets": {
+    "app_4de4b7f1-889b-4c69-a9f8-758ff7fec5d9": "{\"appId\":\"4de4b7f1-889b-4c69-a9f8-758ff7fec5d9\",\"createdAt\":\"2026-07-19T06:31:36Z\",\"name\":\"Brick\",\"orgEnabled\":true,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_275275ed-2258-46f7-b4d0-d1ddd3959aac\"}",
+    "app_702d379e-9e9a-4194-86cc-1aed979be939": "{\"appId\":\"702d379e-9e9a-4194-86cc-1aed979be939\",\"createdAt\":\"2026-07-18T20:01:43Z\",\"name\":\"Nandyvishal17's App\",\"orgEnabled\":true,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_240741b5-41ce-4ae9-9c63-c503319fb26e\"}",
+    "app_8a9c501a-b93a-431e-a313-b52f8b252287": "{\"appId\":\"8a9c501a-b93a-431e-a313-b52f8b252287\",\"createdAt\":\"2026-10-21T19:22:43Z\",\"name\":\"Production Test App\",\"orgEnabled\":true,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_0e58c836-e6f0-4162-a20f-2c49cb5d1ddd\"}",
+    "app_c705dfb0-05c5-4aa4-9c98-20e7c38910a5": "{\"appId\":\"c705dfb0-05c5-4aa4-9c98-20e7c38910a5\",\"createdAt\":\"2026-07-19T09:58:52Z\",\"name\":\"Nandyvishal17's App\",\"orgEnabled\":false,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_b297c7d8-9a7e-4f7c-8790-2534ec51ff69\"}",
+    "app_ec1b9dd8-36fc-4f5d-a2a7-fe9640d67491": "{\"appId\":\"ec1b9dd8-36fc-4f5d-a2a7-fe9640d67491\",\"createdAt\":\"2026-07-19T06:13:16Z\",\"name\":\"Vishal's Potfolio\",\"orgEnabled\":true,\"ownerId\":\"\",\"publishableKey\":\"pk_1282fa86-6b9c-438a-962e-a520a7d1ce1e\"}",
+    "app_eee48596-3679-424d-86c3-ad3d5834e580": "{\"appId\":\"eee48596-3679-424d-86c3-ad3d5834e580\",\"createdAt\":\"2026-07-18T19:21:16Z\",\"name\":\"Works\",\"orgEnabled\":true,\"ownerId\":\"usr_29ce600b7ad08e37\",\"publishableKey\":\"pk_4515e82b-b0f3-470a-8a1b-915fbf0e9b3b\"}"
+  },
   "history": {
+    "app_4de4b7f1-889b-4c69-a9f8-758ff7fec5d9": [
+      {
+        "timestamp": "2026-07-19T06:31:36Z",
+        "value": "{\"appId\":\"4de4b7f1-889b-4c69-a9f8-758ff7fec5d9\",\"createdAt\":\"2026-07-19T06:31:36Z\",\"name\":\"Brick\",\"orgEnabled\":true,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_275275ed-2258-46f7-b4d0-d1ddd3959aac\"}",
+        "txid": "tx_1784442696027528000"
+      }
+    ],
+    "app_702d379e-9e9a-4194-86cc-1aed979be939": [
+      {
+        "timestamp": "2026-07-18T20:01:43Z",
+        "value": "{\"appId\":\"702d379e-9e9a-4194-86cc-1aed979be939\",\"createdAt\":\"2026-07-18T20:01:43Z\",\"name\":\"Nandyvishal17's App\",\"orgEnabled\":true,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_240741b5-41ce-4ae9-9c63-c503319fb26e\"}",
+        "txid": "tx_1784404903354014500"
+      }
+    ],
+    "app_8a9c501a-b93a-431e-a313-b52f8b252287": [
+      {
+        "timestamp": "2026-10-21T19:22:43Z",
+        "value": "{\"appId\":\"8a9c501a-b93a-431e-a313-b52f8b252287\",\"createdAt\":\"2026-10-21T19:22:43Z\",\"name\":\"Production Test App\",\"orgEnabled\":true,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_0e58c836-e6f0-4162-a20f-2c49cb5d1ddd\"}",
+        "txid": "tx_1792610563611988700"
+      }
+    ],
+    "app_c705dfb0-05c5-4aa4-9c98-20e7c38910a5": [
+      {
+        "timestamp": "2026-07-19T09:58:52Z",
+        "value": "{\"appId\":\"c705dfb0-05c5-4aa4-9c98-20e7c38910a5\",\"createdAt\":\"2026-07-19T09:58:52Z\",\"name\":\"Nandyvishal17's App\",\"orgEnabled\":false,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_b297c7d8-9a7e-4f7c-8790-2534ec51ff69\"}",
+        "txid": "tx_1784455132951966500"
+      }
+    ],
+    "app_ec1b9dd8-36fc-4f5d-a2a7-fe9640d67491": [
+      {
+        "timestamp": "2026-07-19T06:13:16Z",
+        "value": "{\"appId\":\"ec1b9dd8-36fc-4f5d-a2a7-fe9640d67491\",\"createdAt\":\"2026-07-19T06:13:16Z\",\"name\":\"Vishal's Potfolio\",\"orgEnabled\":true,\"ownerId\":\"\",\"publishableKey\":\"pk_1282fa86-6b9c-438a-962e-a520a7d1ce1e\"}",
+        "txid": "tx_1784441596117349000"
+      }
+    ],
+    "app_eee48596-3679-424d-86c3-ad3d5834e580": [
+      {
+        "timestamp": "2026-07-18T19:21:16Z",
+        "value": "{\"appId\":\"eee48596-3679-424d-86c3-ad3d5834e580\",\"createdAt\":\"2026-07-18T19:21:16Z\",\"name\":\"Works\",\"orgEnabled\":true,\"ownerId\":\"usr_29ce600b7ad08e37\",\"publishableKey\":\"pk_4515e82b-b0f3-470a-8a1b-915fbf0e9b3b\"}",
+        "txid": "tx_1784402476811781600"
+      }
+    ],
     "identity_Org1MSP_admin": [
       {
         "timestamp": "2026-07-18T12:08:09Z",
         "value": {
-          "userId": "admin",
-          "orgId": "Org1MSP",
-          "role": "admin",
-          "status": "active",
-          "identityHash": "d0a938b8fa94d8bf3d82a43ccba01d6b0ef0fd38d44da5f616b5fcf3da3b1990",
-          "mspId": "Org1MSP",
           "attributes": {
             "brick-admin": "true"
           },
           "createdAt": "2026-07-18T12:08:09Z",
-          "updatedAt": "2026-07-18T12:08:09Z"
+          "identityHash": "d0a938b8fa94d8bf3d82a43ccba01d6b0ef0fd38d44da5f616b5fcf3da3b1990",
+          "mspId": "Org1MSP",
+          "orgId": "Org1MSP",
+          "role": "admin",
+          "status": "active",
+          "updatedAt": "2026-07-18T12:08:09Z",
+          "userId": "admin"
         },
         "txid": "genesis"
       }
@@ -52,19 +127,57 @@
       {
         "timestamp": "2026-07-18T12:08:25Z",
         "value": {
-          "userId": "alice",
-          "orgId": "Org1MSP",
-          "role": "user",
-          "status": "active",
-          "identityHash": "6e74d6268feef649220e6c8d1287db38dd02a42f19a875e72043833913fe58a9",
-          "mspId": "Org1MSP",
           "attributes": {
             "brick-admin": "false"
           },
           "createdAt": "2026-07-18T12:08:25Z",
-          "updatedAt": "2026-07-18T12:08:25Z"
+          "identityHash": "6e74d6268feef649220e6c8d1287db38dd02a42f19a875e72043833913fe58a9",
+          "mspId": "Org1MSP",
+          "orgId": "Org1MSP",
+          "role": "user",
+          "status": "active",
+          "updatedAt": "2026-07-18T12:08:25Z",
+          "userId": "alice"
         },
         "txid": "tx_1784376505598633900"
+      }
+    ],
+    "identity_Org1_usr_0bf70ccfa772cb1a": [
+      {
+        "timestamp": "2026-10-21T19:21:26Z",
+        "value": {
+          "attributes": {
+            "email": "nandyvishal17@gmail.com"
+          },
+          "createdAt": "2026-10-21T19:21:26Z",
+          "identityHash": "b2cad31e963bbe2ae5bf1e9a8f0e2022922bf67b8cb73ebe65518e17952d3816",
+          "mspId": "Org1",
+          "orgId": "Org1",
+          "role": "user",
+          "status": "active",
+          "updatedAt": "2026-10-21T19:21:26Z",
+          "userId": "usr_0bf70ccfa772cb1a"
+        },
+        "txid": "tx_1792610486105175800"
+      }
+    ],
+    "identity_Org2_usr_1ae3d34bbdf94e1a": [
+      {
+        "timestamp": "2026-10-21T19:29:08Z",
+        "value": {
+          "userId": "usr_1ae3d34bbdf94e1a",
+          "orgId": "Org2",
+          "role": "user",
+          "status": "active",
+          "identityHash": "5ba2ab2c003378544966d2f5ecf7ba687a339aafd5cb4fa19f09e8e4c56d8ebb",
+          "mspId": "Org2",
+          "attributes": {
+            "email": "born2cde@gmail.com"
+          },
+          "createdAt": "2026-10-21T19:29:08Z",
+          "updatedAt": "2026-10-21T19:29:08Z"
+        },
+        "txid": "tx_1792610948275053000"
       }
     ]
   },
@@ -77,6 +190,24 @@
         "userId": "alice"
       },
       "timestamp": "2026-07-18T12:08:25.5986339Z"
+    },
+    {
+      "type": "IdentityRegistered",
+      "payload": {
+        "orgId": "Org1",
+        "role": "user",
+        "userId": "usr_0bf70ccfa772cb1a"
+      },
+      "timestamp": "2026-10-21T19:21:26.1051758Z"
+    },
+    {
+      "type": "IdentityRegistered",
+      "payload": {
+        "orgId": "Org2",
+        "role": "user",
+        "userId": "usr_1ae3d34bbdf94e1a"
+      },
+      "timestamp": "2026-10-21T19:29:08.275053Z"
     }
   ]
 }
