@@ -68,6 +68,17 @@ func main() {
 		authGroup.POST("/refresh", handlers.RefreshTokenHandler) // silent token renewal
 	}
 
+	// ── Developer Client Auth Routes (For external apps & edge functions) ────────
+	clientGroup := router.Group("/api/v1/client")
+	{
+		clientGroup.GET("/config", handlers.GetClientConfig)
+		clientGroup.POST("/sign-up", handlers.ClientSignUp)
+		clientGroup.POST("/sign-in", handlers.ClientSignIn)
+		clientGroup.POST("/siwe", handlers.ClientSIWE)
+		clientGroup.POST("/verify-token", handlers.ClientVerifyToken)
+		clientGroup.GET("/jwks.json", handlers.ClientJWKS)
+	}
+
 	// ── Blockchain / Identity Routes ─────────────────────────────────────
 	blockchainGroup := router.Group("/api/blockchain")
 	{
@@ -125,6 +136,14 @@ func main() {
 		appsGroup.POST("", handlers.CreateApplication)
 		appsGroup.GET("", handlers.GetApplications)
 		appsGroup.GET("/:id", handlers.GetApplicationByID)
+		appsGroup.PUT("/:id", handlers.UpdateApplication)
+		appsGroup.POST("/:id/rotate-keys", handlers.RotateAPIKeys)
+		appsGroup.POST("/test-webhook", handlers.TestWebhook)
+		appsGroup.GET("/:id/users", handlers.GetApplicationUsers)
+		appsGroup.POST("/:id/users", handlers.CreateApplicationUser)
+		appsGroup.PUT("/:id/users/:userId", handlers.UpdateApplicationUser)
+		appsGroup.DELETE("/:id/users/:userId", handlers.DeleteApplicationUser)
+		appsGroup.GET("/:id/logs", handlers.GetApplicationLogs)
 	}
 
 	port := cfg.ServerPort

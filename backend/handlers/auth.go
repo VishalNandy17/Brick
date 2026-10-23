@@ -65,8 +65,11 @@ func RequestOTP(c *gin.Context) {
 	if input.Name != "" {
 		var existingUser models.User
 		if err := db.DB.Where("email = ?", input.Email).First(&existingUser).Error; err == nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "ACCOUNT_EXISTS", "message": "An account with this email already exists. Please sign in."})
-			return
+			if existingUser.PasswordHash != "" {
+				c.JSON(http.StatusConflict, gin.H{"error": "ACCOUNT_EXISTS", "message": "An account with this email already exists. Please sign in."})
+				return
+			}
+			// If user has no password set yet, allow them to proceed with OTP to set their password!
 		}
 	}
 
@@ -220,10 +223,9 @@ func LoginWithPassword(c *gin.Context) {
 
 	// ③ Verify password
 	if user.PasswordHash == "" {
-		// Legacy account with no password — prompt them to reset via email OTP
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error":   "NO_PASSWORD_SET",
-			"message": "This account was created before passwords were introduced. Please sign up again or contact support.",
+			"message": "No password has been set for this account yet. Please sign up or verify via OTP to set your password.",
 		})
 		return
 	}

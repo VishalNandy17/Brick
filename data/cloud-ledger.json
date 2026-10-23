@@ -39,6 +39,32 @@
       "createdAt": "2026-10-21T19:21:26Z",
       "updatedAt": "2026-10-21T19:21:26Z"
     },
+    "identity_Org1_usr_1ae3d34bbdf94e1a": {
+      "userId": "usr_1ae3d34bbdf94e1a",
+      "orgId": "Org1",
+      "role": "user",
+      "status": "active",
+      "identityHash": "4addaf9b3b1d0dcb3ff94893513517cb87206b9e13c1f3772b42493d26ab85fe",
+      "mspId": "Org1",
+      "attributes": {
+        "email": "born2cde@gmail.com"
+      },
+      "createdAt": "2026-10-22T06:00:23Z",
+      "updatedAt": "2026-10-22T06:00:23Z"
+    },
+    "identity_Org1_usr_53af90ff0141f682": {
+      "userId": "usr_53af90ff0141f682",
+      "orgId": "Org1",
+      "role": "user",
+      "status": "active",
+      "identityHash": "704038a33fadc15042197dec611d75d0bc4df6572689a8d51659f37c3419f1c3",
+      "mspId": "Org1",
+      "attributes": {
+        "email": "edulav21@gmail.com"
+      },
+      "createdAt": "2026-10-22T06:34:32Z",
+      "updatedAt": "2026-10-22T06:34:32Z"
+    },
     "identity_Org2_usr_1ae3d34bbdf94e1a": {
       "userId": "usr_1ae3d34bbdf94e1a",
       "orgId": "Org2",
@@ -58,6 +84,7 @@
     "app_702d379e-9e9a-4194-86cc-1aed979be939": "{\"appId\":\"702d379e-9e9a-4194-86cc-1aed979be939\",\"createdAt\":\"2026-07-18T20:01:43Z\",\"name\":\"Nandyvishal17's App\",\"orgEnabled\":true,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_240741b5-41ce-4ae9-9c63-c503319fb26e\"}",
     "app_8a9c501a-b93a-431e-a313-b52f8b252287": "{\"appId\":\"8a9c501a-b93a-431e-a313-b52f8b252287\",\"createdAt\":\"2026-10-21T19:22:43Z\",\"name\":\"Production Test App\",\"orgEnabled\":true,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_0e58c836-e6f0-4162-a20f-2c49cb5d1ddd\"}",
     "app_c705dfb0-05c5-4aa4-9c98-20e7c38910a5": "{\"appId\":\"c705dfb0-05c5-4aa4-9c98-20e7c38910a5\",\"createdAt\":\"2026-07-19T09:58:52Z\",\"name\":\"Nandyvishal17's App\",\"orgEnabled\":false,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_b297c7d8-9a7e-4f7c-8790-2534ec51ff69\"}",
+    "app_ce2b5741-933c-4d13-9282-4c68443a2826": "{\"appId\":\"ce2b5741-933c-4d13-9282-4c68443a2826\",\"createdAt\":\"2026-10-22T06:35:02Z\",\"name\":\"Edulav21's App\",\"orgEnabled\":false,\"ownerId\":\"usr_53af90ff0141f682\",\"publishableKey\":\"pk_eda472de-abdf-4465-8326-99bfc682f8b4\"}",
     "app_ec1b9dd8-36fc-4f5d-a2a7-fe9640d67491": "{\"appId\":\"ec1b9dd8-36fc-4f5d-a2a7-fe9640d67491\",\"createdAt\":\"2026-07-19T06:13:16Z\",\"name\":\"Vishal's Potfolio\",\"orgEnabled\":true,\"ownerId\":\"\",\"publishableKey\":\"pk_1282fa86-6b9c-438a-962e-a520a7d1ce1e\"}",
     "app_eee48596-3679-424d-86c3-ad3d5834e580": "{\"appId\":\"eee48596-3679-424d-86c3-ad3d5834e580\",\"createdAt\":\"2026-07-18T19:21:16Z\",\"name\":\"Works\",\"orgEnabled\":true,\"ownerId\":\"usr_29ce600b7ad08e37\",\"publishableKey\":\"pk_4515e82b-b0f3-470a-8a1b-915fbf0e9b3b\"}"
   },
@@ -88,6 +115,13 @@
         "timestamp": "2026-07-19T09:58:52Z",
         "value": "{\"appId\":\"c705dfb0-05c5-4aa4-9c98-20e7c38910a5\",\"createdAt\":\"2026-07-19T09:58:52Z\",\"name\":\"Nandyvishal17's App\",\"orgEnabled\":false,\"ownerId\":\"usr_0bf70ccfa772cb1a\",\"publishableKey\":\"pk_b297c7d8-9a7e-4f7c-8790-2534ec51ff69\"}",
         "txid": "tx_1784455132951966500"
+      }
+    ],
+    "app_ce2b5741-933c-4d13-9282-4c68443a2826": [
+      {
+        "timestamp": "2026-10-22T06:35:02Z",
+        "value": "{\"appId\":\"ce2b5741-933c-4d13-9282-4c68443a2826\",\"createdAt\":\"2026-10-22T06:35:02Z\",\"name\":\"Edulav21's App\",\"orgEnabled\":false,\"ownerId\":\"usr_53af90ff0141f682\",\"publishableKey\":\"pk_eda472de-abdf-4465-8326-99bfc682f8b4\"}",
+        "txid": "tx_1792650902507082200"
       }
     ],
     "app_ec1b9dd8-36fc-4f5d-a2a7-fe9640d67491": [
@@ -161,21 +195,59 @@
         "txid": "tx_1792610486105175800"
       }
     ],
+    "identity_Org1_usr_1ae3d34bbdf94e1a": [
+      {
+        "timestamp": "2026-10-22T06:00:23Z",
+        "value": {
+          "userId": "usr_1ae3d34bbdf94e1a",
+          "orgId": "Org1",
+          "role": "user",
+          "status": "active",
+          "identityHash": "4addaf9b3b1d0dcb3ff94893513517cb87206b9e13c1f3772b42493d26ab85fe",
+          "mspId": "Org1",
+          "attributes": {
+            "email": "born2cde@gmail.com"
+          },
+          "createdAt": "2026-10-22T06:00:23Z",
+          "updatedAt": "2026-10-22T06:00:23Z"
+        },
+        "txid": "tx_1792648823168387800"
+      }
+    ],
+    "identity_Org1_usr_53af90ff0141f682": [
+      {
+        "timestamp": "2026-10-22T06:34:32Z",
+        "value": {
+          "userId": "usr_53af90ff0141f682",
+          "orgId": "Org1",
+          "role": "user",
+          "status": "active",
+          "identityHash": "704038a33fadc15042197dec611d75d0bc4df6572689a8d51659f37c3419f1c3",
+          "mspId": "Org1",
+          "attributes": {
+            "email": "edulav21@gmail.com"
+          },
+          "createdAt": "2026-10-22T06:34:32Z",
+          "updatedAt": "2026-10-22T06:34:32Z"
+        },
+        "txid": "tx_1792650872543033500"
+      }
+    ],
     "identity_Org2_usr_1ae3d34bbdf94e1a": [
       {
         "timestamp": "2026-10-21T19:29:08Z",
         "value": {
-          "userId": "usr_1ae3d34bbdf94e1a",
-          "orgId": "Org2",
-          "role": "user",
-          "status": "active",
-          "identityHash": "5ba2ab2c003378544966d2f5ecf7ba687a339aafd5cb4fa19f09e8e4c56d8ebb",
-          "mspId": "Org2",
           "attributes": {
             "email": "born2cde@gmail.com"
           },
           "createdAt": "2026-10-21T19:29:08Z",
-          "updatedAt": "2026-10-21T19:29:08Z"
+          "identityHash": "5ba2ab2c003378544966d2f5ecf7ba687a339aafd5cb4fa19f09e8e4c56d8ebb",
+          "mspId": "Org2",
+          "orgId": "Org2",
+          "role": "user",
+          "status": "active",
+          "updatedAt": "2026-10-21T19:29:08Z",
+          "userId": "usr_1ae3d34bbdf94e1a"
         },
         "txid": "tx_1792610948275053000"
       }
@@ -208,6 +280,24 @@
         "userId": "usr_1ae3d34bbdf94e1a"
       },
       "timestamp": "2026-10-21T19:29:08.275053Z"
+    },
+    {
+      "type": "IdentityRegistered",
+      "payload": {
+        "orgId": "Org1",
+        "role": "user",
+        "userId": "usr_1ae3d34bbdf94e1a"
+      },
+      "timestamp": "2026-10-22T06:00:23.1683878Z"
+    },
+    {
+      "type": "IdentityRegistered",
+      "payload": {
+        "orgId": "Org1",
+        "role": "user",
+        "userId": "usr_53af90ff0141f682"
+      },
+      "timestamp": "2026-10-22T06:34:32.5430335Z"
     }
   ]
 }

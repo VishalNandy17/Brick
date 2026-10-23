@@ -31,6 +31,7 @@ func Connect() {
 		&models.OTPRecord{},
 		&models.RefreshToken{},
 		&models.Application{},
+		&models.AppUser{},
 	); err != nil {
 		log.Fatalf("❌ Database migration failed: %v", err)
 	}
