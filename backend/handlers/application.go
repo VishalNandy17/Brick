@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -122,7 +123,19 @@ func GetApplications(c *gin.Context) {
 
 /* ─── GET /api/v1/apps/:id ─── */
 
-// GetApplicationByID returns a single app by its ID.
+func maskSecretKey(k string) string {
+	if k == "" {
+		return ""
+	}
+	if len(k) < 14 {
+		return "sk_••••••••••••"
+	}
+	prefix := k[:7]
+	suffix := k[len(k)-4:]
+	return prefix + "••••••••••••••••" + suffix
+}
+
+// GetApplicationByID returns a single app by its ID. Secret keys are masked by default (CRITICAL-003 fix).
 func GetApplicationByID(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -155,12 +168,56 @@ func GetApplicationByID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"app":                  app,
-		"secret_key":           app.SecretKey,
-		"live_secret_key":      app.LiveSecretKey,
+		"secret_key":           maskSecretKey(app.SecretKey),
+		"live_secret_key":      maskSecretKey(app.LiveSecretKey),
 		"publishable_key":      app.PublishableKey,
 		"live_publishable_key": app.LivePublishableKey,
 		"ledger_status":        ledgerStatus,
 	})
+}
+
+/* ─── POST /api/v1/apps/:id/reveal-key ─── */
+
+type RevealKeyInput struct {
+	KeyType string `json:"key_type"` // "test" or "live"
+}
+
+// RevealAPIKey safely reveals the secret key on-demand for authenticated application owners.
+func RevealAPIKey(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "UNAUTHORIZED"})
+		return
+	}
+
+	id := c.Param("id")
+	var app models.Application
+	if id == "current" || id == "" {
+		if err := db.DB.Where("owner_id = ?", userID).Order("created_at desc").First(&app).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "NOT_FOUND", "message": "Application not found"})
+			return
+		}
+	} else {
+		if err := db.DB.Where("id = ? AND owner_id = ?", id, userID).First(&app).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "NOT_FOUND", "message": "Application not found"})
+			return
+		}
+	}
+
+	var input RevealKeyInput
+	_ = c.ShouldBindJSON(&input)
+
+	if strings.EqualFold(input.KeyType, "live") {
+		c.JSON(http.StatusOK, gin.H{
+			"key_type":   "live",
+			"secret_key": app.LiveSecretKey,
+		})
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"key_type":   "test",
+			"secret_key": app.SecretKey,
+		})
+	}
 }
 
 /* ─── PUT /api/v1/apps/:id ─── */

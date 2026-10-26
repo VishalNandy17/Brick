@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -90,9 +92,29 @@ func HashToken(raw string) string {
 	return hex.EncodeToString(h[:])
 }
 
+var (
+	devFallbackSecret string
+	fallbackOnce      sync.Once
+)
+
 func jwtSecret() string {
 	if s := os.Getenv("JWT_SECRET"); s != "" {
 		return s
 	}
+
+	// In release/production mode, never allow static predictable secret
+	if os.Getenv("GIN_MODE") == "release" || os.Getenv("IS_PRODUCTION") == "true" {
+		fallbackOnce.Do(func() {
+			log.Println("⚠️ CRITICAL SECURITY WARNING: JWT_SECRET environment variable is unset in production! Generating secure ephemeral runtime secret.")
+			b := make([]byte, 32)
+			if _, err := rand.Read(b); err != nil {
+				devFallbackSecret = uuid.New().String() + uuid.New().String()
+			} else {
+				devFallbackSecret = hex.EncodeToString(b)
+			}
+		})
+		return devFallbackSecret
+	}
+
 	return "brick-dev-secret-change-in-prod"
 }

@@ -8,6 +8,7 @@ import (
 	"brick/middleware"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -55,19 +56,28 @@ func main() {
 	router.Use(middleware.CORSMiddleware())
 	router.Use(middleware.LoggingMiddleware())
 
+	// ── Global DDoS / Flood Protection: 120 req/min per IP ──────────────
+	router.Use(middleware.GlobalRateLimitMiddleware(120, 60*time.Second))
+
+	// ── Body Size Limiter: Max 1MB per request ───────────────────────────
+	router.Use(middleware.MaxBodySizeMiddleware(1 * 1024 * 1024))
+
 	// Health
 	router.GET("/api/health", Health)
 	router.GET("/health", Health)
 
 	// ── Auth Routes (OTP + JWT) — Public ─────────────────────────────────────────────
 	authGroup := router.Group("/api/v1/auth")
+	// Strict rate limit on auth endpoints: 10 requests/min/IP (brute-force & credential-stuffing protection)
+	authGroup.Use(middleware.StrictAuthRateLimitMiddleware(10, 60*time.Second))
 	{
-		authGroup.POST("/request-otp", handlers.RequestOTP)   // Signup: send email OTP
-		authGroup.POST("/verify-otp", handlers.VerifyOTP)     // Signup: verify OTP + set password
-		authGroup.POST("/login", handlers.LoginWithPassword)   // Login: email + password
-		authGroup.POST("/refresh", handlers.RefreshTokenHandler) // silent token renewal
-		authGroup.POST("/forgot-password", handlers.ForgotPassword) // Send password reset code
-		authGroup.POST("/reset-password", handlers.ResetPassword)   // Verify code + set new password
+		authGroup.POST("/request-otp", handlers.RequestOTP)          // Signup: send email OTP
+		authGroup.POST("/verify-otp", handlers.VerifyOTP)            // Signup: verify OTP + set password
+		authGroup.POST("/login", handlers.LoginWithPassword)          // Login: email + password
+		authGroup.POST("/refresh", handlers.RefreshTokenHandler)      // silent token renewal
+		authGroup.POST("/forgot-password", handlers.ForgotPassword)   // Send password reset code
+		authGroup.POST("/reset-password", handlers.ResetPassword)     // Verify code + set new password
+		authGroup.POST("/logout", handlers.Logout)                    // Revoke refresh token + clear cookie
 	}
 
 	// ── Developer Client Auth Routes (For external apps & edge functions) ────────
@@ -141,6 +151,7 @@ func main() {
 		appsGroup.PUT("/:id", handlers.UpdateApplication)
 		appsGroup.POST("/:id/rotate-keys", handlers.RotateAPIKeys)
 		appsGroup.POST("/test-webhook", handlers.TestWebhook)
+		appsGroup.POST("/:id/reveal-key", handlers.RevealAPIKey)        // Safe on-demand secret key reveal
 		appsGroup.GET("/:id/users", handlers.GetApplicationUsers)
 		appsGroup.POST("/:id/users", handlers.CreateApplicationUser)
 		appsGroup.PUT("/:id/users/:userId", handlers.UpdateApplicationUser)

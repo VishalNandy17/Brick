@@ -6,9 +6,11 @@ import (
 	"brick/models"
 	"brick/services"
 	"crypto/sha256"
+	"crypto/subtle"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -170,8 +172,8 @@ func VerifyOTP(c *gin.Context) {
 		return
 	}
 
-	// ③ Validate code match
-	if record.Code != strings.TrimSpace(input.Code) {
+	// ③ Validate code match using timing-safe comparison
+	if subtle.ConstantTimeCompare([]byte(record.Code), []byte(strings.TrimSpace(input.Code))) != 1 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP_INVALID", "message": "Incorrect verification code."})
 		return
 	}
@@ -318,14 +320,20 @@ func issueTokensAndRespond(c *gin.Context, user models.User) {
 		if dbErr := db.DB.Create(&refreshRecord).Error; dbErr != nil {
 			log.Printf("Refresh token DB save warning: %v", dbErr)
 		} else {
+			secure := isProductionEnv(c)
+			sameSite := http.SameSiteLaxMode
+			if secure {
+				sameSite = http.SameSiteNoneMode
+			}
+			c.SetSameSite(sameSite)
 			c.SetCookie(
 				"brick_refresh_token",
 				rawRefresh,
 				7*24*60*60, // 7 days in seconds
 				"/",
 				"",
-				false, // secure=false for localhost dev
-				true,  // httpOnly=true
+				secure,
+				true, // httpOnly=true
 			)
 		}
 	}
@@ -338,6 +346,16 @@ func issueTokensAndRespond(c *gin.Context, user models.User) {
 }
 
 /* ─── Helpers ─── */
+
+func isProductionEnv(c *gin.Context) bool {
+	if os.Getenv("GIN_MODE") == "release" || os.Getenv("IS_PRODUCTION") == "true" {
+		return true
+	}
+	if c != nil && (c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https") {
+		return true
+	}
+	return false
+}
 
 func generateJWT(user models.User) (string, error) {
 	return services.GenerateAccessToken(user, "Org1")
@@ -460,8 +478,8 @@ func ResetPassword(c *gin.Context) {
 		return
 	}
 
-	// Validate code
-	if record.Code != strings.TrimSpace(input.Code) {
+	// Validate code using timing-safe comparison
+	if subtle.ConstantTimeCompare([]byte(record.Code), []byte(strings.TrimSpace(input.Code))) != 1 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP_INVALID", "message": "Incorrect verification code."})
 		return
 	}
@@ -488,4 +506,35 @@ func ResetPassword(c *gin.Context) {
 
 	// Automatically issue new session tokens and log them in!
 	issueTokensAndRespond(c, user)
+}
+
+/* ─── POST /api/v1/auth/logout ─── */
+
+func Logout(c *gin.Context) {
+	rawToken, err := c.Cookie("brick_refresh_token")
+	if err == nil && rawToken != "" {
+		tokenHash := services.HashToken(rawToken)
+		db.DB.Model(&models.RefreshToken{}).Where("token_hash = ?", tokenHash).Update("revoked", true)
+	}
+
+	secure := isProductionEnv(c)
+	sameSite := http.SameSiteLaxMode
+	if secure {
+		sameSite = http.SameSiteNoneMode
+	}
+	c.SetSameSite(sameSite)
+	c.SetCookie(
+		"brick_refresh_token",
+		"",
+		-1, // MaxAge: -1 deletes cookie immediately
+		"/",
+		"",
+		secure,
+		true,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Session terminated successfully",
+	})
 }
