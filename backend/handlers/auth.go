@@ -109,10 +109,10 @@ func RequestOTP(c *gin.Context) {
 	}
 
 	if emailResult.Delivered {
-		responsePayload["message"] = fmt.Sprintf("Verification code sent to %s via %s. Valid for 10 minutes.", maskEmail(input.Email), emailResult.Provider)
+		responsePayload["message"] = fmt.Sprintf("Verification code sent to %s. Valid for 10 minutes.", maskEmail(input.Email))
 	} else {
-		// When using testing sandbox where outbound email is restricted to owner, provide the code directly
-		responsePayload["message"] = fmt.Sprintf("Verification code: %s (Sandbox mode — valid for 10 minutes)", otp)
+		// Fallback when outbound email is disabled/unreachable
+		responsePayload["message"] = fmt.Sprintf("Verification code: %s (valid for 10 minutes)", otp)
 		responsePayload["code"] = otp
 	}
 

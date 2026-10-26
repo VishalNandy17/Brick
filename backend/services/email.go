@@ -49,7 +49,7 @@ func SendOTPEmail(toEmail string, otpCode string) (EmailResult, error) {
 		fromEmail = os.Getenv("SENDGRID_FROM_EMAIL")
 	}
 	if fromEmail == "" {
-		fromEmail = "onboarding@resend.dev"
+		fromEmail = "auth@trybrick.dev"
 	}
 
 	fromName := os.Getenv("EMAIL_FROM_NAME")
@@ -103,10 +103,10 @@ func SendOTPEmail(toEmail string, otpCode string) (EmailResult, error) {
 func sendViaResend(apiKey, fromEmail, fromName, toEmail, otpCode string) error {
 	url := "https://api.resend.com/emails"
 
-	// Unless custom domain is verified in Resend, use the approved sandbox sender
+	// Default to verified domain sender: auth@trybrick.dev
 	resendFrom := fromEmail
 	if resendFrom == "" || strings.HasSuffix(resendFrom, "@gmail.com") || strings.HasSuffix(resendFrom, "@yahoo.com") || strings.HasSuffix(resendFrom, "@outlook.com") {
-		resendFrom = "onboarding@resend.dev"
+		resendFrom = "auth@trybrick.dev"
 	}
 
 	payload := map[string]interface{}{
