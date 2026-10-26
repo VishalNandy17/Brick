@@ -61,17 +61,9 @@ func RequestOTP(c *gin.Context) {
 		return
 	}
 
-	// ①.5 Prevent duplicate signup if Name is provided (signup flow)
-	if input.Name != "" {
-		var existingUser models.User
-		if err := db.DB.Where("email = ?", input.Email).First(&existingUser).Error; err == nil {
-			if existingUser.PasswordHash != "" {
-				c.JSON(http.StatusConflict, gin.H{"error": "ACCOUNT_EXISTS", "message": "An account with this email already exists. Please sign in."})
-				return
-			}
-			// If user has no password set yet, allow them to proceed with OTP to set their password!
-		}
-	}
+	// ①.5 Check if user already exists
+	var existingUser models.User
+	accountExists := db.DB.Where("email = ?", input.Email).First(&existingUser).Error == nil
 
 	// ② Generate 6-digit OTP
 	otp, err := services.GenerateOTP()
@@ -109,11 +101,19 @@ func RequestOTP(c *gin.Context) {
 	}
 
 	if emailResult.Delivered {
-		responsePayload["message"] = fmt.Sprintf("Verification code sent to %s. Valid for 10 minutes.", maskEmail(input.Email))
+		if accountExists {
+			responsePayload["message"] = fmt.Sprintf("Account found. Verification code sent to %s to sign in / update password.", maskEmail(input.Email))
+			responsePayload["account_exists"] = true
+		} else {
+			responsePayload["message"] = fmt.Sprintf("Verification code sent to %s. Valid for 10 minutes.", maskEmail(input.Email))
+		}
 	} else {
 		// Fallback when outbound email is disabled/unreachable
 		responsePayload["message"] = fmt.Sprintf("Verification code: %s (valid for 10 minutes)", otp)
 		responsePayload["code"] = otp
+		if accountExists {
+			responsePayload["account_exists"] = true
+		}
 	}
 
 	c.JSON(http.StatusOK, responsePayload)
