@@ -39,6 +39,16 @@ type LoginInput struct {
 	Password string `json:"password" binding:"required,min=8"`
 }
 
+type ForgotPasswordInput struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type ResetPasswordInput struct {
+	Email       string `json:"email" binding:"required,email"`
+	Code        string `json:"code" binding:"required,len=6"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
 type AuthResponse struct {
 	Token    string      `json:"token"`
 	User     models.User `json:"user"`
@@ -345,4 +355,137 @@ func maskEmail(email string) string {
 	}
 	masked := string(parts[0][0]) + strings.Repeat("*", len(parts[0])-1)
 	return masked + "@" + parts[1]
+}
+
+/* ─── POST /api/v1/auth/forgot-password ─── */
+
+func ForgotPassword(c *gin.Context) {
+	var input ForgotPasswordInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_REQUEST", "message": err.Error()})
+		return
+	}
+
+	valid, reason := services.ValidateEmail(input.Email)
+	if !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_EMAIL", "message": reason})
+		return
+	}
+
+	var user models.User
+	if err := db.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		// Generic message to avoid email enumeration
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "If an account with this email exists, a password reset code has been sent.",
+		})
+		return
+	}
+
+	otp, err := services.GenerateOTP()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "OTP_GENERATION_FAILED", "message": "Could not generate reset code"})
+		return
+	}
+
+	// Invalidate previous OTPs
+	db.DB.Where("email = ? AND used = false", input.Email).
+		Updates(map[string]interface{}{"used": true})
+
+	record := models.OTPRecord{
+		Email:     input.Email,
+		Code:      otp,
+		ExpiresAt: time.Now().UTC().Add(10 * time.Minute),
+		Used:      false,
+	}
+	if err := db.DB.Create(&record).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB_ERROR", "message": "Failed to save reset code"})
+		return
+	}
+
+	emailResult, err := services.SendOTPEmail(input.Email, otp)
+	if err != nil {
+		log.Printf("Email dispatch error for %s: %v", input.Email, err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "EMAIL_SEND_FAILED", "message": "Could not send reset email. Try again."})
+		return
+	}
+
+	responsePayload := gin.H{
+		"success": true,
+	}
+	if emailResult.Delivered {
+		responsePayload["message"] = fmt.Sprintf("A password reset code has been sent to %s.", maskEmail(input.Email))
+	} else {
+		responsePayload["message"] = fmt.Sprintf("Password reset code: %s (valid for 10 minutes)", otp)
+		responsePayload["code"] = otp
+	}
+
+	c.JSON(http.StatusOK, responsePayload)
+}
+
+/* ─── POST /api/v1/auth/reset-password ─── */
+
+func ResetPassword(c *gin.Context) {
+	var input ResetPasswordInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_REQUEST", "message": err.Error()})
+		return
+	}
+
+	if len(input.NewPassword) < 8 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "PASSWORD_TOO_SHORT", "message": "Password must be at least 8 characters."})
+		return
+	}
+
+	// Find user
+	var user models.User
+	if err := db.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "USER_NOT_FOUND", "message": "No account found with this email."})
+		return
+	}
+
+	// Check latest valid OTP
+	var record models.OTPRecord
+	result := db.DB.Where(
+		"email = ? AND used = false AND expires_at > ?",
+		input.Email, time.Now().UTC(),
+	).Order("created_at desc").First(&record)
+
+	if result.Error == gorm.ErrRecordNotFound {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP_NOT_FOUND", "message": "No valid reset code found. Please request a new code."})
+		return
+	}
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB_ERROR", "message": "Database error during code verification"})
+		return
+	}
+
+	// Validate code
+	if record.Code != strings.TrimSpace(input.Code) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP_INVALID", "message": "Incorrect verification code."})
+		return
+	}
+
+	// Mark code as used
+	db.DB.Model(&record).Update("used", true)
+
+	// Hash new password
+	hashed, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "PASSWORD_HASH_FAILED", "message": "Could not secure password"})
+		return
+	}
+
+	// Update password in DB
+	if err := db.DB.Model(&user).Update("password_hash", string(hashed)).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "UPDATE_FAILED", "message": "Failed to update password."})
+		return
+	}
+	user.PasswordHash = string(hashed)
+
+	// Revoke old refresh tokens for this user
+	db.DB.Model(&models.RefreshToken{}).Where("user_id = ?", user.ID).Update("revoked", true)
+
+	// Automatically issue new session tokens and log them in!
+	issueTokensAndRespond(c, user)
 }

@@ -66,6 +66,8 @@ func main() {
 		authGroup.POST("/verify-otp", handlers.VerifyOTP)     // Signup: verify OTP + set password
 		authGroup.POST("/login", handlers.LoginWithPassword)   // Login: email + password
 		authGroup.POST("/refresh", handlers.RefreshTokenHandler) // silent token renewal
+		authGroup.POST("/forgot-password", handlers.ForgotPassword) // Send password reset code
+		authGroup.POST("/reset-password", handlers.ResetPassword)   // Verify code + set new password
 	}
 
 	// ── Developer Client Auth Routes (For external apps & edge functions) ────────
