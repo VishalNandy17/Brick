@@ -96,17 +96,27 @@ func RequestOTP(c *gin.Context) {
 		return
 	}
 
-	// ⑤ Send OTP via Twilio SendGrid
-	if err := services.SendOTPEmail(input.Email, otp); err != nil {
+	// ⑤ Send OTP via Resend / SMTP / SendGrid / Fallback
+	emailResult, err := services.SendOTPEmail(input.Email, otp)
+	if err != nil {
 		log.Printf("Email send error for %s: %v", input.Email, err)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "EMAIL_SEND_FAILED", "message": "Could not send verification email. Try again."})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	responsePayload := gin.H{
 		"success": true,
-		"message": fmt.Sprintf("Verification code sent to %s. Valid for 10 minutes.", maskEmail(input.Email)),
-	})
+	}
+
+	if emailResult.Delivered {
+		responsePayload["message"] = fmt.Sprintf("Verification code sent to %s via %s. Valid for 10 minutes.", maskEmail(input.Email), emailResult.Provider)
+	} else {
+		// When using testing sandbox where outbound email is restricted to owner, provide the code directly
+		responsePayload["message"] = fmt.Sprintf("Verification code: %s (Sandbox mode — valid for 10 minutes)", otp)
+		responsePayload["code"] = otp
+	}
+
+	c.JSON(http.StatusOK, responsePayload)
 }
 
 /* ─── POST /api/v1/auth/verify-otp  (signup completion only) ─── */

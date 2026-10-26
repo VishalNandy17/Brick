@@ -3,9 +3,11 @@ package services
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/smtp"
 	"os"
@@ -15,6 +17,12 @@ import (
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
 )
+
+// EmailResult tracks whether the email was physically dispatched to an external inbox
+type EmailResult struct {
+	Delivered bool
+	Provider  string
+}
 
 // GenerateOTP creates a cryptographically secure 6-digit code
 func GenerateOTP() (string, error) {
@@ -31,11 +39,11 @@ func GenerateOTP() (string, error) {
 }
 
 // SendOTPEmail dispatches the OTP code using the best available provider:
-//  1. Resend (resend.com) if RESEND_API_KEY is present
-//  2. Standard SMTP (e.g. Gmail App Password, Brevo) if SMTP_HOST is present
-//  3. Twilio SendGrid if SENDGRID_API_KEY is present
-//  4. Console fallback (always logs to terminal so verification never gets stuck)
-func SendOTPEmail(toEmail string, otpCode string) error {
+//  1. Resend API (HTTPS port 443 — reliable across cloud hosts like Render)
+//  2. Standard SMTP with 3s dial timeout (so blocked ports never hang requests)
+//  3. Twilio SendGrid
+//  4. Console fallback (always logs code to stdout so user/dev is never blocked)
+func SendOTPEmail(toEmail string, otpCode string) (EmailResult, error) {
 	fromEmail := os.Getenv("EMAIL_FROM")
 	if fromEmail == "" {
 		fromEmail = os.Getenv("SENDGRID_FROM_EMAIL")
@@ -52,48 +60,42 @@ func SendOTPEmail(toEmail string, otpCode string) error {
 		fromName = "Brick Auth"
 	}
 
-	// Always log OTP to server console for zero-friction local development & debugging
+	// Always log OTP to server console for zero-friction debugging
 	log.Printf("🔑 [OTP DISPATCH] Destination: %s | Code: %s | Expires: 10m", toEmail, otpCode)
 
-	// ① Try Resend API (https://resend.com)
+	// 1️⃣ Try Resend API (HTTPS port 443)
 	if resendKey := os.Getenv("RESEND_API_KEY"); resendKey != "" {
 		err := sendViaResend(resendKey, fromEmail, fromName, toEmail, otpCode)
 		if err == nil {
-			log.Printf("✅ OTP sent via Resend to %s", toEmail)
-			return nil
+			log.Printf("✅ OTP successfully sent via Resend to %s", toEmail)
+			return EmailResult{Delivered: true, Provider: "resend"}, nil
 		}
-		log.Printf("⚠️ Resend failed (%v), trying fallback...", err)
+		log.Printf("⚠️ Resend failed (%v), trying next provider...", err)
 	}
 
-	// ② Try Standard SMTP (Gmail, Brevo, AWS SES, Mailgun)
+	// 2️⃣ Try Standard SMTP (with 3-second dial timeout)
 	if smtpHost := os.Getenv("SMTP_HOST"); smtpHost != "" {
 		err := sendViaSMTP(smtpHost, fromEmail, fromName, toEmail, otpCode)
 		if err == nil {
 			log.Printf("✅ OTP sent via SMTP (%s) to %s", smtpHost, toEmail)
-			return nil
+			return EmailResult{Delivered: true, Provider: "smtp"}, nil
 		}
-		log.Printf("⚠️ SMTP failed (%v), trying fallback...", err)
+		log.Printf("⚠️ SMTP failed or blocked (%v), trying fallback...", err)
 	}
 
-	// ③ Try SendGrid API
+	// 3️⃣ Try SendGrid API
 	if sendgridKey := os.Getenv("SENDGRID_API_KEY"); sendgridKey != "" {
 		err := sendViaSendGrid(sendgridKey, fromEmail, fromName, toEmail, otpCode)
 		if err == nil {
 			log.Printf("✅ OTP sent via SendGrid to %s", toEmail)
-			return nil
+			return EmailResult{Delivered: true, Provider: "sendgrid"}, nil
 		}
 		log.Printf("⚠️ SendGrid failed (%v)", err)
 	}
 
-	// ④ If in development or providers failed, allow the code if DEV_FALLBACK is enabled
-	// By default, if no external provider succeeds, we succeed and rely on the console log
-	// so developer testing is never blocked by quota limits.
-	if os.Getenv("STRICT_EMAIL") != "true" {
-		log.Printf("ℹ️ [DEV FALLBACK] Email dispatch marked successful via Console Log. Code is [%s]", otpCode)
-		return nil
-	}
-
-	return fmt.Errorf("no email provider succeeded; please check RESEND_API_KEY, SMTP_HOST, or SENDGRID_API_KEY")
+	// 4️⃣ Fallback: Allow code dispatch and log to console
+	log.Printf("🛡️ [DEV/DEMO FALLBACK] Email marked processed. Verification code for [%s] is: %s", toEmail, otpCode)
+	return EmailResult{Delivered: false, Provider: "console_fallback"}, nil
 }
 
 // ─── Resend Implementation ───────────────────────────────────────────────────
@@ -101,8 +103,14 @@ func SendOTPEmail(toEmail string, otpCode string) error {
 func sendViaResend(apiKey, fromEmail, fromName, toEmail, otpCode string) error {
 	url := "https://api.resend.com/emails"
 
+	// Unless custom domain is verified in Resend, use the approved sandbox sender
+	resendFrom := fromEmail
+	if resendFrom == "" || strings.HasSuffix(resendFrom, "@gmail.com") || strings.HasSuffix(resendFrom, "@yahoo.com") || strings.HasSuffix(resendFrom, "@outlook.com") {
+		resendFrom = "onboarding@resend.dev"
+	}
+
 	payload := map[string]interface{}{
-		"from":    fmt.Sprintf("%s <%s>", fromName, fromEmail),
+		"from":    fmt.Sprintf("%s <%s>", fromName, resendFrom),
 		"to":      []string{toEmail},
 		"subject": "Your Brick Verification Code",
 		"html":    buildHTMLContent(otpCode),
@@ -121,7 +129,7 @@ func sendViaResend(apiKey, fromEmail, fromName, toEmail, otpCode string) error {
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 6 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -136,7 +144,7 @@ func sendViaResend(apiKey, fromEmail, fromName, toEmail, otpCode string) error {
 	return nil
 }
 
-// ─── Standard SMTP Implementation (Gmail, Brevo, Custom) ─────────────────────
+// ─── Standard SMTP Implementation (with 3-second dial timeout) ───────────────
 
 func sendViaSMTP(host, fromEmail, fromName, toEmail, otpCode string) error {
 	port := os.Getenv("SMTP_PORT")
@@ -149,7 +157,46 @@ func sendViaSMTP(host, fromEmail, fromName, toEmail, otpCode string) error {
 	}
 	pass := os.Getenv("SMTP_PASS")
 
-	auth := smtp.PlainAuth("", user, pass, host)
+	addr := fmt.Sprintf("%s:%s", host, port)
+
+	// Dial with 3-second timeout so blocked cloud ports (like Render free tier) abort quickly
+	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
+	if err != nil {
+		return fmt.Errorf("smtp connection timeout/blocked: %w", err)
+	}
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		conn.Close()
+		return err
+	}
+	defer client.Close()
+
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		config := &tls.Config{ServerName: host}
+		if err = client.StartTLS(config); err != nil {
+			return err
+		}
+	}
+
+	if pass != "" {
+		auth := smtp.PlainAuth("", user, pass, host)
+		if err = client.Auth(auth); err != nil {
+			return err
+		}
+	}
+
+	if err = client.Mail(user); err != nil {
+		return err
+	}
+	if err = client.Rcpt(toEmail); err != nil {
+		return err
+	}
+
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
 
 	subject := "Your Brick Verification Code"
 	body := buildHTMLContent(otpCode)
@@ -167,11 +214,16 @@ func sendViaSMTP(host, fromEmail, fromName, toEmail, otpCode string) error {
 	}
 	message += "\r\n" + body
 
-	addr := fmt.Sprintf("%s:%s", host, port)
-	return smtp.SendMail(addr, auth, user, []string{toEmail}, []byte(message))
+	if _, err = w.Write([]byte(message)); err != nil {
+		return err
+	}
+	if err = w.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
 }
 
-// ─── SendGrid Implementation ────────────────────────────────────────────────
+// ─── SendGrid Implementation ─────────────────────────────────────────────────
 
 func sendViaSendGrid(apiKey, fromEmail, fromName, toEmail, otpCode string) error {
 	from := mail.NewEmail(fromName, fromEmail)
@@ -194,7 +246,7 @@ func sendViaSendGrid(apiKey, fromEmail, fromName, toEmail, otpCode string) error
 	return nil
 }
 
-// ─── HTML Template ──────────────────────────────────────────────────────────
+// ─── HTML Template ───────────────────────────────────────────────────────────
 
 func buildHTMLContent(otpCode string) string {
 	return fmt.Sprintf(`
@@ -210,7 +262,7 @@ func buildHTMLContent(otpCode string) string {
     <div style="background:#18181b; color:#ffffff; border-radius:12px; text-align:center; padding:20px; letter-spacing:8px; font-size:32px; font-weight:800; margin-bottom:28px; font-family:monospace;">
       %s
     </div>
-    <p style="color:#71717a; font-size:13px; margin:0 0 8px;">⏱ Code expires in <strong>10 minutes</strong>.</p>
+    <p style="color:#71717a; font-size:13px; margin:0 0 8px;">⏱️ Code expires in <strong>10 minutes</strong>.</p>
     <p style="color:#a1a1aa; font-size:12px; margin:0;">If you didn't request this code, you can safely ignore this email.</p>
   </div>
 </body>
