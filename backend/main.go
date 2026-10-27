@@ -81,14 +81,18 @@ func main() {
 	}
 
 	// ── Developer Client Auth Routes (For external apps & edge functions) ────────
+	// ─── Developer Client Auth Routes (For external apps & edge functions) ─────────
 	clientGroup := router.Group("/api/v1/client")
 	{
 		clientGroup.GET("/config", handlers.GetClientConfig)
-		clientGroup.POST("/sign-up", handlers.ClientSignUp)
-		clientGroup.POST("/sign-in", handlers.ClientSignIn)
-		clientGroup.POST("/siwe", handlers.ClientSIWE)
 		clientGroup.POST("/verify-token", handlers.ClientVerifyToken)
 		clientGroup.GET("/jwks.json", handlers.ClientJWKS)
+
+		// Strict rate limiting on end-user authentication endpoints (20 req/min/IP)
+		clientAuthLimit := middleware.StrictAuthRateLimitMiddleware(20, 60*time.Second)
+		clientGroup.POST("/sign-up", clientAuthLimit, handlers.ClientSignUp)
+		clientGroup.POST("/sign-in", clientAuthLimit, handlers.ClientSignIn)
+		clientGroup.POST("/siwe", clientAuthLimit, handlers.ClientSIWE)
 	}
 
 	// ── Blockchain / Identity Routes ─────────────────────────────────────

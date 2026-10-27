@@ -23,6 +23,9 @@ func SecurityHeadersMiddleware() gin.HandlerFunc {
 		// Content Security Policy for API server
 		c.Writer.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 
+		// Enforce HTTPS with HTTP Strict Transport Security (HSTS)
+		c.Writer.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+
 		c.Next()
 	}
 }

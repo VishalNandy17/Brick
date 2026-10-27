@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// maskSecretKey moved to top of file
 
 /* ─── POST /api/v1/apps ─── */
 
@@ -94,6 +97,8 @@ func CreateApplication(c *gin.Context) {
 		"LOW",
 	)
 
+	app.SecretKey = maskSecretKey(app.SecretKey)
+	app.LiveSecretKey = maskSecretKey(app.LiveSecretKey)
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"app":     app,
@@ -125,6 +130,8 @@ func GetApplications(c *gin.Context) {
 	for _, a := range apps {
 		var opts []models.AuthOption
 		_ = json.Unmarshal([]byte(a.AuthOptions), &opts)
+		a.SecretKey = maskSecretKey(a.SecretKey)
+		a.LiveSecretKey = maskSecretKey(a.LiveSecretKey)
 		result = append(result, AppResponse{Application: a, AuthOptionsParsed: opts})
 	}
 
@@ -325,6 +332,8 @@ func UpdateApplication(c *gin.Context) {
 		"LOW",
 	)
 
+	app.SecretKey = maskSecretKey(app.SecretKey)
+	app.LiveSecretKey = maskSecretKey(app.LiveSecretKey)
 	c.JSON(http.StatusOK, gin.H{"success": true, "app": app})
 }
 
@@ -418,20 +427,50 @@ func GetApplicationUsers(c *gin.Context) {
 	if env != "" && env != "all" {
 		query = query.Where("environment = ?", env)
 	}
+
+	search = strings.TrimSpace(search)
+	if len(search) > 64 {
+		search = search[:64]
+	}
 	if search != "" {
-		s := "%" + search + "%"
+		escaped := strings.ReplaceAll(search, "\\", "\\\\")
+		escaped = strings.ReplaceAll(escaped, "%", "\\%")
+		escaped = strings.ReplaceAll(escaped, "_", "\\_")
+		s := "%" + escaped + "%"
 		query = query.Where("email LIKE ? OR name LIKE ? OR wallet_address LIKE ?", s, s, s)
 	}
 
+	limit := 50
+	if l := c.Query("limit"); l != "" {
+		if parsedLimit, err := strconv.Atoi(l); err == nil && parsedLimit > 0 {
+			if parsedLimit > 100 {
+				limit = 100
+			} else {
+				limit = parsedLimit
+			}
+		}
+	}
+	offset := 0
+	if p := c.Query("page"); p != "" {
+		if page, err := strconv.Atoi(p); err == nil && page > 1 {
+			offset = (page - 1) * limit
+		}
+	}
+
+	var total int64
+	query.Model(&models.AppUser{}).Count(&total)
+
 	var users []models.AppUser
-	if err := query.Order("created_at desc").Find(&users).Error; err != nil {
+	if err := query.Order("created_at desc").Limit(limit).Offset(offset).Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB_ERROR", "message": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"users": users,
-		"total": len(users),
+		"total": total,
+		"limit": limit,
+		"page":  (offset / limit) + 1,
 		"app": gin.H{
 			"id":   app.ID,
 			"name": app.Name,
@@ -749,9 +788,9 @@ func GetApplicationLogs(c *gin.Context) {
 
 	env := c.Query("environment")
 
-	// Query real persisted audit logs from Neon PostgreSQL
+	// Query real persisted audit logs from Neon PostgreSQL scoped to app or developer
 	var dbLogs []models.AuditLog
-	logQuery := db.DB.Where("app_id = ? OR app_id = 'system'", app.ID)
+	logQuery := db.DB.Where("app_id = ? OR (app_id = 'system' AND user_id = ?)", app.ID, userID)
 	if env != "" && env != "all" {
 		logQuery = logQuery.Where("environment = ? OR environment = 'production'", env)
 	}

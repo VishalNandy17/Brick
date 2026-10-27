@@ -10,7 +10,8 @@ import (
 type OTPRecord struct {
 	ID        uint           `gorm:"primaryKey;autoIncrement" json:"-"`
 	Email     string         `gorm:"index;not null" json:"email"`
-	Code      string         `gorm:"not null" json:"-"` // Never expose the raw OTP in JSON
+	Code      string         `gorm:"not null" json:"-"` // SHA-256 hashed OTP, never stored in raw plaintext
+	Attempts  int            `gorm:"default:0" json:"-"` // Tracks verification attempts; locked after 5 failed attempts
 	ExpiresAt time.Time      `gorm:"not null" json:"expires_at"`
 	Used      bool           `gorm:"default:false" json:"used"`
 	CreatedAt time.Time      `json:"created_at"`

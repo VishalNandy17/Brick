@@ -7,6 +7,7 @@ import (
 	"brick/services"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -59,6 +60,22 @@ type AuthResponse struct {
 
 /* ─── POST /api/v1/auth/request-otp ─── */
 
+
+// hashOTP computes SHA-256 digest of the one-time password to prevent plaintext storage in DB
+func hashOTP(code string) string {
+	h := sha256.Sum256([]byte(strings.TrimSpace(code)))
+	return hex.EncodeToString(h[:])
+}
+
+// verifyOTPCode compares user input against stored code, supporting both hashed and legacy unhashed codes
+func verifyOTPCode(record *models.OTPRecord, inputCode string) bool {
+	cleanInput := strings.TrimSpace(inputCode)
+	hashedInput := hashOTP(cleanInput)
+	matchHashed := subtle.ConstantTimeCompare([]byte(record.Code), []byte(hashedInput)) == 1
+	matchRaw := subtle.ConstantTimeCompare([]byte(record.Code), []byte(cleanInput)) == 1
+	return matchHashed || matchRaw
+}
+
 func RequestOTP(c *gin.Context) {
 	var input RequestOTPInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -91,9 +108,10 @@ func RequestOTP(c *gin.Context) {
 	// ④ Store new OTP in DB (expires in 10 minutes)
 	record := models.OTPRecord{
 		Email:     input.Email,
-		Code:      otp,
+		Code:      hashOTP(otp),
 		ExpiresAt: time.Now().UTC().Add(10 * time.Minute),
 		Used:      false,
+		Attempts:  0,
 	}
 	if err := db.DB.Create(&record).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB_ERROR", "message": "Failed to save OTP"})
@@ -173,7 +191,14 @@ func VerifyOTP(c *gin.Context) {
 	}
 
 	// ③ Validate code match using timing-safe comparison
-	if subtle.ConstantTimeCompare([]byte(record.Code), []byte(strings.TrimSpace(input.Code))) != 1 {
+	if record.Attempts >= 5 {
+		db.DB.Model(&record).Update("used", true)
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "OTP_LOCKED", "message": "Too many failed attempts. Please request a new verification code."})
+		return
+	}
+
+	if !verifyOTPCode(&record, input.Code) {
+		db.DB.Model(&record).Update("attempts", record.Attempts+1)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP_INVALID", "message": "Incorrect verification code."})
 		return
 	}
@@ -447,9 +472,10 @@ func ForgotPassword(c *gin.Context) {
 
 	record := models.OTPRecord{
 		Email:     input.Email,
-		Code:      otp,
+		Code:      hashOTP(otp),
 		ExpiresAt: time.Now().UTC().Add(10 * time.Minute),
 		Used:      false,
+		Attempts:  0,
 	}
 	if err := db.DB.Create(&record).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB_ERROR", "message": "Failed to save reset code"})
@@ -514,7 +540,14 @@ func ResetPassword(c *gin.Context) {
 	}
 
 	// Validate code using timing-safe comparison
-	if subtle.ConstantTimeCompare([]byte(record.Code), []byte(strings.TrimSpace(input.Code))) != 1 {
+	if record.Attempts >= 5 {
+		db.DB.Model(&record).Update("used", true)
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "OTP_LOCKED", "message": "Too many failed attempts. Please request a new verification code."})
+		return
+	}
+
+	if !verifyOTPCode(&record, input.Code) {
+		db.DB.Model(&record).Update("attempts", record.Attempts+1)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP_INVALID", "message": "Incorrect verification code."})
 		return
 	}

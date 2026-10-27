@@ -12,6 +12,17 @@ import (
 
 /* ─── POST /api/v1/auth/refresh ─── */
 
+// clearRefreshCookie safely clears the refresh cookie matching production flags
+func clearRefreshCookie(c *gin.Context) {
+	secure := isProductionEnv(c)
+	sameSite := http.SameSiteLaxMode
+	if secure {
+		sameSite = http.SameSiteNoneMode
+	}
+	c.SetSameSite(sameSite)
+	c.SetCookie("brick_refresh_token", "", -1, "/", "", secure, true)
+}
+
 // RefreshTokenHandler silently renews an access token using the HttpOnly
 // refresh token cookie set during VerifyOTP. No credentials required.
 func RefreshTokenHandler(c *gin.Context) {
@@ -33,7 +44,7 @@ func RefreshTokenHandler(c *gin.Context) {
 	).First(&record)
 	if result.Error != nil {
 		// Clear stale cookie
-		c.SetCookie("brick_refresh_token", "", -1, "/", "", false, true)
+		clearRefreshCookie(c)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error":   "REFRESH_TOKEN_INVALID",
 			"message": "Refresh token is invalid, expired, or revoked. Please sign in again.",
@@ -51,7 +62,7 @@ func RefreshTokenHandler(c *gin.Context) {
 		return
 	}
 	if !user.Active {
-		c.SetCookie("brick_refresh_token", "", -1, "/", "", false, true)
+		clearRefreshCookie(c)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error":   "IDENTITY_REVOKED",
 			"message": "This account has been deactivated.",

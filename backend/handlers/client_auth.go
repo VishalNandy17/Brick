@@ -7,7 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +19,7 @@ import (
 	"brick/models"
 	"brick/services"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -45,6 +49,54 @@ type ClientSIWEInput struct {
 
 type ClientVerifyTokenInput struct {
 	Token string `json:"token" binding:"required"`
+}
+
+
+// isSafeWebhookURL validates that a webhook destination does not target loopback, private ranges, or cloud metadata
+func isSafeWebhookURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
+		return false
+	}
+	hostname := strings.ToLower(u.Hostname())
+	if hostname == "localhost" || hostname == "127.0.0.1" || hostname == "::1" || hostname == "169.254.169.254" {
+		return false
+	}
+	ip := net.ParseIP(hostname)
+	if ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return false
+		}
+	}
+	return true
+}
+
+// verifyEthereumSignature verifies an EIP-191 personal_sign signature against a claimed Ethereum address
+func verifyEthereumSignature(addressHex, message, signatureHex string) (bool, error) {
+	cleanSig := strings.TrimPrefix(strings.TrimSpace(signatureHex), "0x")
+	sigBytes, err := hex.DecodeString(cleanSig)
+	if err != nil || len(sigBytes) != 65 {
+		return false, fmt.Errorf("invalid signature length: expected 65 bytes")
+	}
+
+	// Normalize recovery byte (V)
+	if sigBytes[64] >= 27 {
+		sigBytes[64] -= 27
+	}
+	if sigBytes[64] != 0 && sigBytes[64] != 1 {
+		return false, fmt.Errorf("invalid recovery ID")
+	}
+
+	prefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(message), message)
+	msgHash := crypto.Keccak256([]byte(prefix))
+
+	pubKey, err := crypto.SigToPub(msgHash, sigBytes)
+	if err != nil {
+		return false, fmt.Errorf("failed to recover public key: %w", err)
+	}
+
+	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
+	return strings.EqualFold(recoveredAddr.Hex(), addressHex), nil
 }
 
 /* ─── Helper: Get App from Publishable Key Header / Query ─── */
@@ -102,7 +154,7 @@ func generateAppUserJWT(user *models.AppUser, app *models.Application) (string, 
 		secret = []byte(app.LiveSecretKey)
 	}
 	if len(secret) == 0 {
-		secret = []byte("brick_fallback_secret_key_32_bytes_long!")
+		return "", fmt.Errorf("application secret key is not configured")
 	}
 
 	claims := jwt.MapClaims{
@@ -159,7 +211,7 @@ func dispatchWebhooks(app *models.Application, eventType string, payload interfa
 	}
 
 	for _, wh := range s.Webhooks {
-		if wh.Status != "active" || wh.URL == "" {
+		if wh.Status != "active" || wh.URL == "" || !isSafeWebhookURL(wh.URL) {
 			continue
 		}
 		// Check event match
@@ -459,8 +511,22 @@ func ClientSIWE(c *gin.Context) {
 	}
 
 	addr := strings.ToLower(strings.TrimSpace(input.WalletAddress))
-	if addr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_WALLET", "message": "Wallet address required"})
+	matched, _ := regexp.MatchString(`^0x[0-9a-fA-F]{40}$`, addr)
+	if !matched {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_WALLET", "message": "Must be a valid 42-character 0x-prefixed Ethereum address"})
+		return
+	}
+
+	if strings.TrimSpace(input.Message) == "" || strings.TrimSpace(input.Signature) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "SIGNATURE_REQUIRED", "message": "Message and cryptographic signature are required for SIWE authentication"})
+		return
+	}
+
+	// Verify cryptographic signature
+	validSig, sigErr := verifyEthereumSignature(addr, input.Message, input.Signature)
+	if !validSig {
+		services.RecordEvent(c, app.ID, "", addr, "SIWE_AUTH_FAILED", fmt.Sprintf("Cryptographic signature mismatch for %s: %v", addr, sigErr), "failed", "HIGH")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "SIGNATURE_INVALID", "message": "Cryptographic signature verification failed"})
 		return
 	}
 
@@ -549,20 +615,30 @@ func ClientVerifyToken(c *gin.Context) {
 		return
 	}
 
-	// Parse & verify token with app secret key
-	secret := []byte(app.SecretKey)
-	if len(secret) == 0 {
-		secret = []byte("brick_fallback_secret_key_32_bytes_long!")
+	// Parse & verify token with app secret key or live secret key
+	var token *jwt.Token
+	keysToTry := []string{app.SecretKey}
+	if app.LiveSecretKey != "" {
+		keysToTry = append(keysToTry, app.LiveSecretKey)
 	}
 
-	token, err := jwt.Parse(input.Token, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
+	for _, k := range keysToTry {
+		if k == "" {
+			continue
 		}
-		return secret, nil
-	})
+		t, err := jwt.Parse(input.Token, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
+			return []byte(k), nil
+		})
+		if err == nil && t.Valid {
+			token = t
+			break
+		}
+	}
 
-	if err != nil || !token.Valid {
+	if token == nil || !token.Valid {
 		c.JSON(http.StatusUnauthorized, gin.H{"valid": false, "error": "TOKEN_INVALID", "message": "Token verification failed"})
 		return
 	}
