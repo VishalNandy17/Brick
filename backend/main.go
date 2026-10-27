@@ -161,6 +161,10 @@ func main() {
 		appsGroup.PUT("/:id/users/:userId", handlers.UpdateApplicationUser)
 		appsGroup.DELETE("/:id/users/:userId", handlers.DeleteApplicationUser)
 		appsGroup.GET("/:id/logs", handlers.GetApplicationLogs)
+
+		// Meta AI Security Engine (muse-spark-1.1)
+		appsGroup.POST("/:id/ai/analyze-logs", handlers.AnalyzeLogs)
+		appsGroup.POST("/:id/ai/explain-access", handlers.ExplainAccess)
 	}
 
 	port := cfg.ServerPort
