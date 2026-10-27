@@ -5,7 +5,6 @@ import (
 	"brick/ledger"
 	"brick/models"
 	"brick/services"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -83,6 +82,17 @@ func CreateApplication(c *gin.Context) {
 			fmt.Printf("⚠️ Ledger write warning for app %s: %v\n", app.ID, err)
 		}
 	}
+
+	services.RecordEvent(
+		c,
+		app.ID,
+		app.OwnerID,
+		"Developer",
+		"APP_CREATED",
+		fmt.Sprintf("Application '%s' initialized with cryptographic keys and ledger anchor", app.Name),
+		"confirmed",
+		"LOW",
+	)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
@@ -304,6 +314,17 @@ func UpdateApplication(c *gin.Context) {
 		})
 	}
 
+	services.RecordEvent(
+		c,
+		app.ID,
+		app.OwnerID,
+		"Developer",
+		"CONFIG_UPDATED",
+		"Application authentication and security policies updated",
+		"confirmed",
+		"LOW",
+	)
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "app": app})
 }
 
@@ -345,6 +366,17 @@ func RotateAPIKeys(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB_ERROR", "message": "Failed to rotate secret key"})
 		return
 	}
+
+	services.RecordEvent(
+		c,
+		app.ID,
+		app.OwnerID,
+		"Developer",
+		"KEY_ROTATED",
+		fmt.Sprintf("Secret API key rotated for %s environment", env),
+		"confirmed",
+		"MEDIUM",
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":              "Secret key rotated successfully",
@@ -522,6 +554,21 @@ func CreateApplicationUser(c *gin.Context) {
 		})
 	}
 
+	actor := appUser.Email
+	if actor == "" {
+		actor = appUser.WalletAddress
+	}
+	services.RecordEvent(
+		c,
+		app.ID,
+		appUser.ID,
+		actor,
+		"USER_CREATED",
+		fmt.Sprintf("User account created by developer (%s)", appUser.Role),
+		"confirmed",
+		"LOW",
+	)
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "User created successfully",
 		"user":    appUser,
@@ -648,6 +695,21 @@ func DeleteApplicationUser(c *gin.Context) {
 		"email": appUser.Email,
 	})
 
+	actor := appUser.Email
+	if actor == "" {
+		actor = appUser.WalletAddress
+	}
+	services.RecordEvent(
+		c,
+		app.ID,
+		appUser.ID,
+		actor,
+		"USER_DELETED",
+		fmt.Sprintf("User %s deleted and revoked on ledger", actor),
+		"confirmed",
+		"MEDIUM",
+	)
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User deleted and revoked on ledger"})
 }
 
@@ -687,59 +749,33 @@ func GetApplicationLogs(c *gin.Context) {
 
 	env := c.Query("environment")
 
-	// Query AppUsers to build live user-specific ledger audit entries
-	var users []models.AppUser
-	uQuery := db.DB.Where("app_id = ?", app.ID)
+	// Query real persisted audit logs from Neon PostgreSQL
+	var dbLogs []models.AuditLog
+	logQuery := db.DB.Where("app_id = ? OR app_id = 'system'", app.ID)
 	if env != "" && env != "all" {
-		uQuery = uQuery.Where("environment = ?", env)
+		logQuery = logQuery.Where("environment = ? OR environment = 'production'", env)
 	}
-	_ = uQuery.Order("created_at desc").Limit(50).Find(&users)
 
-	logs := make([]AppAuditLog, 0)
+	_ = logQuery.Order("created_at desc").Limit(100).Find(&dbLogs)
 
-	// Add user registration & signin logs from blockchain ledger
-	for _, u := range users {
-		actor := u.Email
-		if actor == "" {
-			actor = u.WalletAddress
+	// If no logs recorded yet for this app, record and return an initial anchor event
+	if len(dbLogs) == 0 {
+		initialLog := models.AuditLog{
+			AppID:       app.ID,
+			UserID:      app.OwnerID,
+			Actor:       "Developer",
+			EventType:   "CONFIG_ANCHORED",
+			Details:     "Application security policies, publishable keys, and auth guardrails anchored to ledger",
+			Status:      "confirmed",
+			IPAddress:   c.ClientIP(),
+			UserAgent:   c.GetHeader("User-Agent"),
+			Environment: "development",
+			RiskScore:   "LOW",
+			AssetKey:    app.LedgerAssetKey,
 		}
-
-		// Signup event
-		logs = append(logs, AppAuditLog{
-			ID:        "log_su_" + u.ID[:8],
-			Type:      "USER_SIGNUP",
-			Actor:     actor,
-			Details:   fmt.Sprintf("User account registered with on-chain identity anchor (%s)", u.Role),
-			AssetKey:  u.LedgerAssetKey,
-			Status:    "confirmed",
-			Timestamp: u.CreatedAt.UTC().Format(time.RFC3339),
-			TxHash:    fmt.Sprintf("0x%x", sha256.Sum256([]byte(u.ID+u.CreatedAt.String()))),
-		})
-
-		// Session created event
-		logs = append(logs, AppAuditLog{
-			ID:        "log_si_" + u.ID[:8],
-			Type:      "SESSION_CREATED",
-			Actor:     actor,
-			Details:   "Cryptographic JWT issued and authenticated via " + u.Environment + " pipeline",
-			AssetKey:  u.LedgerAssetKey,
-			Status:    "verified",
-			Timestamp: u.UpdatedAt.UTC().Format(time.RFC3339),
-			TxHash:    fmt.Sprintf("0x%x", sha256.Sum256([]byte(u.ID+u.UpdatedAt.String()+"session"))),
-		})
+		_ = db.DB.Create(&initialLog)
+		dbLogs = append(dbLogs, initialLog)
 	}
-
-	// Add application config update event
-	logs = append(logs, AppAuditLog{
-		ID:        "log_cfg_" + app.ID[:8],
-		Type:      "CONFIG_ANCHORED",
-		Actor:     "Developer",
-		Details:   "Application security rules, MFA policies, and auth methods anchored to ledger",
-		AssetKey:  app.LedgerAssetKey,
-		Status:    "confirmed",
-		Timestamp: app.UpdatedAt.UTC().Format(time.RFC3339),
-		TxHash:    fmt.Sprintf("0x%x", sha256.Sum256([]byte(app.ID+app.UpdatedAt.String()))),
-	})
 
 	ledgerMode := "cloud"
 	svc := ledger.Get()
@@ -748,8 +784,8 @@ func GetApplicationLogs(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"logs":        logs,
-		"total":       len(logs),
+		"logs":        dbLogs,
+		"total":       len(dbLogs),
 		"app_id":      app.ID,
 		"ledger_mode": ledgerMode,
 	})

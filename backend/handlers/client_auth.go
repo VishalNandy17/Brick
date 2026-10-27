@@ -14,6 +14,7 @@ import (
 	"brick/db"
 	"brick/ledger"
 	"brick/models"
+	"brick/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -338,6 +339,22 @@ func ClientSignUp(c *gin.Context) {
 		"created_at":     appUser.CreatedAt,
 	})
 
+	// Record immutable audit event
+	actor := appUser.Email
+	if actor == "" {
+		actor = appUser.WalletAddress
+	}
+	services.RecordEvent(
+		c,
+		app.ID,
+		appUser.ID,
+		actor,
+		"USER_SIGNUP",
+		fmt.Sprintf("User account registered with on-chain identity anchor (%s)", appUser.Role),
+		"confirmed",
+		"LOW",
+	)
+
 	c.JSON(http.StatusCreated, gin.H{
 		"token":        token,
 		"user":         appUser,
@@ -362,17 +379,20 @@ func ClientSignIn(c *gin.Context) {
 
 	var appUser models.AppUser
 	if err := db.DB.Where("app_id = ? AND email = ?", app.ID, input.Email).First(&appUser).Error; err != nil {
+		services.RecordEvent(c, app.ID, "", input.Email, "USER_LOGIN_FAILED", "Failed sign-in attempt: user not found", "failed", "MEDIUM")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "INVALID_CREDENTIALS", "message": "Invalid email or password"})
 		return
 	}
 
 	if !appUser.Active {
+		services.RecordEvent(c, app.ID, appUser.ID, appUser.Email, "ACCESS_DENIED", "Deactivated user attempted login", "warning", "HIGH")
 		c.JSON(http.StatusForbidden, gin.H{"error": "ACCOUNT_DISABLED", "message": "Account has been deactivated"})
 		return
 	}
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(appUser.PasswordHash), []byte(input.Password)); err != nil {
+		services.RecordEvent(c, app.ID, appUser.ID, appUser.Email, "USER_LOGIN_FAILED", "Failed sign-in attempt: incorrect password", "failed", "MEDIUM")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "INVALID_CREDENTIALS", "message": "Invalid email or password"})
 		return
 	}
@@ -403,6 +423,18 @@ func ClientSignIn(c *gin.Context) {
 		"email":      appUser.Email,
 		"session_at": time.Now().UTC(),
 	})
+
+	// Record audit event
+	services.RecordEvent(
+		c,
+		app.ID,
+		appUser.ID,
+		appUser.Email,
+		"SESSION_CREATED",
+		fmt.Sprintf("Cryptographic JWT issued and authenticated via %s pipeline", appUser.Environment),
+		"verified",
+		"LOW",
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"token":        token,
@@ -482,6 +514,18 @@ func ClientSIWE(c *gin.Context) {
 		"wallet_address": appUser.WalletAddress,
 		"auth_method":    "web3",
 	})
+
+	// Record audit event
+	services.RecordEvent(
+		c,
+		app.ID,
+		appUser.ID,
+		addr,
+		"SIWE_AUTHENTICATED",
+		fmt.Sprintf("Web3 wallet authenticated via Sign-In with Ethereum (%s)", addr),
+		"verified",
+		"LOW",
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"token":        token,

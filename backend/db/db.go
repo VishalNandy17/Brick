@@ -32,6 +32,7 @@ func Connect() {
 		&models.RefreshToken{},
 		&models.Application{},
 		&models.AppUser{},
+		&models.AuditLog{},
 	); err != nil {
 		log.Fatalf("❌ Database migration failed: %v", err)
 	}

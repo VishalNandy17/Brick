@@ -217,6 +217,17 @@ func VerifyOTP(c *gin.Context) {
 		}
 	}
 
+	services.RecordEvent(
+		c,
+		getDeveloperDefaultAppID(user.ID),
+		user.ID,
+		user.Email,
+		"USER_SIGNUP",
+		"Developer account verified and registered on platform",
+		"confirmed",
+		"LOW",
+	)
+
 	issueTokensAndRespond(c, user)
 }
 
@@ -232,19 +243,21 @@ func LoginWithPassword(c *gin.Context) {
 	// ① Look up user by email
 	var user models.User
 	if err := db.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
-		// Generic message — don't reveal whether the email exists
+		services.RecordEvent(c, "system", "", input.Email, "USER_LOGIN_FAILED", "Failed developer login: email not found", "failed", "MEDIUM")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "INVALID_CREDENTIALS", "message": "Invalid email or password."})
 		return
 	}
 
 	// ② Check account is active
 	if !user.Active {
+		services.RecordEvent(c, "system", user.ID, user.Email, "ACCESS_DENIED", "Deactivated developer account attempted login", "warning", "HIGH")
 		c.JSON(http.StatusForbidden, gin.H{"error": "ACCOUNT_INACTIVE", "message": "Your account has been deactivated."})
 		return
 	}
 
 	// ③ Verify password
 	if user.PasswordHash == "" {
+		services.RecordEvent(c, "system", user.ID, user.Email, "USER_LOGIN_FAILED", "Login failed: account has no password set", "warning", "MEDIUM")
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error":   "NO_PASSWORD_SET",
 			"message": "No password has been set for this account yet. Please sign up or verify via OTP to set your password.",
@@ -252,6 +265,7 @@ func LoginWithPassword(c *gin.Context) {
 		return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
+		services.RecordEvent(c, "system", user.ID, user.Email, "USER_LOGIN_FAILED", "Failed developer login: incorrect password", "failed", "MEDIUM")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "INVALID_CREDENTIALS", "message": "Invalid email or password."})
 		return
 	}
@@ -338,6 +352,19 @@ func issueTokensAndRespond(c *gin.Context, user models.User) {
 		}
 	}
 
+	// Record audit event
+	appID := getDeveloperDefaultAppID(user.ID)
+	services.RecordEvent(
+		c,
+		appID,
+		user.ID,
+		user.Email,
+		"SESSION_CREATED",
+		"Developer authenticated successfully; cryptographic session tokens issued",
+		"confirmed",
+		"LOW",
+	)
+
 	c.JSON(http.StatusOK, AuthResponse{
 		Token:    accessToken,
 		User:     user,
@@ -346,6 +373,14 @@ func issueTokensAndRespond(c *gin.Context, user models.User) {
 }
 
 /* ─── Helpers ─── */
+
+func getDeveloperDefaultAppID(userID string) string {
+	var app models.Application
+	if err := db.DB.Where("owner_id = ?", userID).Order("created_at desc").First(&app).Error; err == nil {
+		return app.ID
+	}
+	return "system"
+}
 
 func isProductionEnv(c *gin.Context) bool {
 	if os.Getenv("GIN_MODE") == "release" || os.Getenv("IS_PRODUCTION") == "true" {
@@ -504,6 +539,17 @@ func ResetPassword(c *gin.Context) {
 	// Revoke old refresh tokens for this user
 	db.DB.Model(&models.RefreshToken{}).Where("user_id = ?", user.ID).Update("revoked", true)
 
+	services.RecordEvent(
+		c,
+		getDeveloperDefaultAppID(user.ID),
+		user.ID,
+		user.Email,
+		"PASSWORD_RESET",
+		"Developer password successfully reset via OTP verification",
+		"confirmed",
+		"LOW",
+	)
+
 	// Automatically issue new session tokens and log them in!
 	issueTokensAndRespond(c, user)
 }
@@ -531,6 +577,17 @@ func Logout(c *gin.Context) {
 		"",
 		secure,
 		true,
+	)
+
+	services.RecordEvent(
+		c,
+		"system",
+		"",
+		"Developer",
+		"SESSION_REVOKED",
+		"Session terminated and refresh token revoked",
+		"confirmed",
+		"LOW",
 	)
 
 	c.JSON(http.StatusOK, gin.H{
