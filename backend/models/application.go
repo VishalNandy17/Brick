@@ -19,7 +19,7 @@ type Application struct {
 	ID                 string         `gorm:"primaryKey;type:varchar(36)" json:"id"`
 	OwnerID            string         `gorm:"index;type:varchar(255);not null" json:"owner_id"`
 	Name               string         `gorm:"type:varchar(255);not null" json:"name"`
-	AuthOptions        string         `gorm:"type:text" json:"auth_options"`     // JSON: []AuthOption
+	AuthOptions        string         `gorm:"type:text" json:"auth_options"` // JSON: []AuthOption
 	OrgEnabled         bool           `gorm:"default:false" json:"org_enabled"`
 	BillingEnabled     bool           `gorm:"default:false" json:"billing_enabled"`
 	PublishableKey     string         `gorm:"type:varchar(255);uniqueIndex" json:"publishable_key"` // Development / Test
@@ -31,6 +31,17 @@ type Application struct {
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
 	DeletedAt          gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+type TokenSigningKey struct {
+	ID                  string     `gorm:"primaryKey;type:varchar(36)" json:"-"`
+	AppID               string     `gorm:"index;type:varchar(36);not null" json:"-"`
+	Environment         string     `gorm:"index;type:varchar(20);not null" json:"-"`
+	PublicKeyPEM        string     `gorm:"type:text;not null" json:"-"`
+	EncryptedPrivateKey string     `gorm:"type:text;not null" json:"-"`
+	Active              bool       `gorm:"index;default:true" json:"-"`
+	RetiredAt           *time.Time `gorm:"index" json:"-"`
+	CreatedAt           time.Time  `json:"-"`
 }
 
 // BeforeCreate sets a UUID primary key and generates API keys before insert.

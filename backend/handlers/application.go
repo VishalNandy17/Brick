@@ -5,6 +5,7 @@ import (
 	"brick/ledger"
 	"brick/models"
 	"brick/services"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -68,12 +69,12 @@ func CreateApplication(c *gin.Context) {
 	svc := ledger.Get()
 	if svc != nil {
 		ledgerPayload := map[string]interface{}{
-			"appId":       app.ID,
-			"name":        app.Name,
-			"ownerId":     app.OwnerID,
+			"appId":          app.ID,
+			"name":           app.Name,
+			"ownerId":        app.OwnerID,
 			"publishableKey": app.PublishableKey,
-			"orgEnabled":  app.OrgEnabled,
-			"createdAt":   time.Now().UTC().Format(time.RFC3339),
+			"orgEnabled":     app.OrgEnabled,
+			"createdAt":      time.Now().UTC().Format(time.RFC3339),
 		}
 		payloadJSON, _ := json.Marshal(ledgerPayload)
 		_, err := svc.Invoke("CreateAsset", map[string]interface{}{
@@ -397,6 +398,42 @@ func RotateAPIKeys(c *gin.Context) {
 	})
 }
 
+func RotateJWTSigningKey(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "UNAUTHORIZED"})
+		return
+	}
+	var app models.Application
+	appQuery := db.DB.Where("owner_id = ?", userID)
+	if appID := c.Param("id"); appID != "current" && appID != "" {
+		appQuery = appQuery.Where("id = ?", appID)
+	}
+	if err := appQuery.Order("created_at desc").First(&app).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "NOT_FOUND", "message": "Application not found"})
+		return
+	}
+	environment := "development"
+	if c.Query("env") == "live" || c.Query("env") == "production" {
+		environment = "production"
+	}
+	publishableKey := app.PublishableKey
+	if environment == "production" {
+		publishableKey = app.LivePublishableKey
+	}
+	key, err := rotateAppTokenSigningKey(app.ID, environment)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "SIGNING_KEY_ROTATION_FAILED", "message": "Could not rotate application token signing key"})
+		return
+	}
+	services.RecordEvent(c, app.ID, app.OwnerID, "Developer", "JWT_SIGNING_KEY_ROTATED", "Application JWT signing key rotated", "confirmed", "MEDIUM")
+	c.JSON(http.StatusOK, gin.H{
+		"success": true, "kid": key.ID, "environment": environment,
+		"jwks_uri":                   "/api/v1/client/jwks.json?publishable_key=" + publishableKey,
+		"old_keys_valid_for_seconds": 86400,
+	})
+}
+
 /* ─── GET /api/v1/apps/:id/users (Application Users Listing) ─── */
 
 func GetApplicationUsers(c *gin.Context) {
@@ -476,6 +513,106 @@ func GetApplicationUsers(c *gin.Context) {
 			"name": app.Name,
 		},
 	})
+}
+
+func GetApplicationUserActivity(c *gin.Context) {
+	ownerID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "UNAUTHORIZED"})
+		return
+	}
+	appID := c.Param("id")
+	var app models.Application
+	appQuery := db.DB.Where("owner_id = ?", ownerID)
+	if appID != "current" && appID != "" {
+		appQuery = appQuery.Where("id = ?", appID)
+	}
+	if err := appQuery.Order("created_at desc").First(&app).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "NOT_FOUND", "message": "Application not found"})
+		return
+	}
+	var user models.AppUser
+	if err := db.DB.Where("id = ? AND app_id = ?", c.Param("userId"), app.ID).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "USER_NOT_FOUND"})
+		return
+	}
+	query := db.DB.Model(&models.AuditLog{}).Where("app_id = ? AND user_id = ?", app.ID, user.ID)
+	if env := c.Query("environment"); env != "" && env != "all" {
+		if env != "development" && env != "production" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_ENVIRONMENT"})
+			return
+		}
+		query = query.Where("environment = ?", env)
+	}
+	var events []models.AuditLog
+	if err := query.Select("id, event_type, status, risk_score, environment, created_at").Order("created_at desc").Limit(100).Find(&events).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB_ERROR", "message": "Could not load user activity"})
+		return
+	}
+	timeline := make([]gin.H, 0, len(events))
+	for _, event := range events {
+		timeline = append(timeline, gin.H{"id": event.ID, "event_type": event.EventType, "status": event.Status, "risk_score": event.RiskScore, "environment": event.Environment, "timestamp": event.CreatedAt})
+	}
+	c.JSON(http.StatusOK, gin.H{"user_id": user.ID, "events": timeline, "total": len(timeline)})
+}
+
+func UpdateApplicationUserMetadata(c *gin.Context) {
+	ownerID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "UNAUTHORIZED"})
+		return
+	}
+	var app models.Application
+	query := db.DB.Where("owner_id = ?", ownerID)
+	if appID := c.Param("id"); appID != "current" && appID != "" {
+		query = query.Where("id = ?", appID)
+	}
+	if err := query.Order("created_at desc").First(&app).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "NOT_FOUND", "message": "Application not found"})
+		return
+	}
+	var user models.AppUser
+	userQuery := db.DB.Where("id = ? AND app_id = ?", c.Param("userId"), app.ID)
+	if environment := c.Query("environment"); environment != "" {
+		if environment != "development" && environment != "production" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_ENVIRONMENT"})
+			return
+		}
+		userQuery = userQuery.Where("environment = ?", environment)
+	}
+	if err := userQuery.First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "USER_NOT_FOUND"})
+		return
+	}
+	var input struct {
+		Metadata json.RawMessage `json:"metadata" binding:"required"`
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16*1024+1024)
+	if err := c.ShouldBindJSON(&input); err != nil || len(input.Metadata) == 0 || len(input.Metadata) > 16384 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_METADATA", "message": "Metadata must be a JSON object no larger than 16 KiB"})
+		return
+	}
+	var metadata map[string]json.RawMessage
+	if err := json.Unmarshal(input.Metadata, &metadata); err != nil || metadata == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_METADATA", "message": "Metadata must be a JSON object"})
+		return
+	}
+	encoded, err := json.Marshal(metadata)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_METADATA"})
+		return
+	}
+	user.MetadataJSON = string(encoded)
+	if err := db.DB.Model(&user).Update("metadata_json", user.MetadataJSON).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB_ERROR", "message": "Could not update user metadata"})
+		return
+	}
+	actor := user.Email
+	if actor == "" {
+		actor = user.WalletAddress
+	}
+	services.RecordEvent(c, app.ID, user.ID, actor, "USER_METADATA_UPDATED", "Developer updated app-user metadata", "confirmed", "LOW")
+	c.JSON(http.StatusOK, gin.H{"success": true, "user_id": user.ID, "metadata": metadata})
 }
 
 /* ─── POST /api/v1/apps/:id/users (Direct User Provisioning) ─── */
@@ -756,11 +893,11 @@ func DeleteApplicationUser(c *gin.Context) {
 
 type AppAuditLog struct {
 	ID        string `json:"id"`
-	Type      string `json:"type"`      // "USER_SIGNUP", "USER_SIGNIN", "MFA_VERIFIED", "KEY_ROTATED", "CONFIG_UPDATED"
-	Actor     string `json:"actor"`     // user email / wallet / system
+	Type      string `json:"type"`  // "USER_SIGNUP", "USER_SIGNIN", "MFA_VERIFIED", "KEY_ROTATED", "CONFIG_UPDATED"
+	Actor     string `json:"actor"` // user email / wallet / system
 	Details   string `json:"details"`
 	AssetKey  string `json:"asset_key"`
-	Status    string `json:"status"`    // "confirmed", "verified"
+	Status    string `json:"status"` // "confirmed", "verified"
 	Timestamp string `json:"timestamp"`
 	TxHash    string `json:"tx_hash"`
 }
@@ -828,6 +965,86 @@ func GetApplicationLogs(c *gin.Context) {
 		"app_id":      app.ID,
 		"ledger_mode": ledgerMode,
 	})
+}
+
+func ExportApplicationLogsCSV(c *gin.Context) {
+	ownerID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "UNAUTHORIZED"})
+		return
+	}
+	var app models.Application
+	query := db.DB.Where("owner_id = ?", ownerID)
+	if appID := c.Param("id"); appID != "current" && appID != "" {
+		query = query.Where("id = ?", appID)
+	}
+	if err := query.Order("created_at desc").First(&app).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "NOT_FOUND", "message": "Application not found"})
+		return
+	}
+	logQuery := db.DB.Model(&models.AuditLog{}).Where("app_id = ?", app.ID)
+	environment := c.Query("environment")
+	if environment != "" && environment != "all" {
+		if environment != "development" && environment != "production" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_ENVIRONMENT"})
+			return
+		}
+		logQuery = logQuery.Where("environment = ?", environment)
+	}
+	if rawSince := c.Query("since"); rawSince != "" {
+		since, err := time.Parse(time.RFC3339, rawSince)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_DATE", "message": "since must be RFC3339"})
+			return
+		}
+		logQuery = logQuery.Where("created_at >= ?", since)
+	}
+	if rawUntil := c.Query("until"); rawUntil != "" {
+		until, err := time.Parse(time.RFC3339, rawUntil)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_DATE", "message": "until must be RFC3339"})
+			return
+		}
+		logQuery = logQuery.Where("created_at <= ?", until)
+	}
+	var count int64
+	if err := logQuery.Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB_ERROR", "message": "Could not count audit logs"})
+		return
+	}
+	const maxRows = 10000
+	var logs []models.AuditLog
+	if err := logQuery.Select("id, event_type, actor, status, risk_score, environment, created_at, tx_hash").Order("created_at desc").Limit(maxRows).Find(&logs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB_ERROR", "message": "Could not export audit logs"})
+		return
+	}
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=brick-audit-%s.csv", time.Now().UTC().Format("20060102T150405Z")))
+	c.Header("Cache-Control", "no-store")
+	c.Header("X-Export-Total", strconv.FormatInt(count, 10))
+	if count > maxRows {
+		c.Header("X-Export-Truncated", "true")
+	}
+	c.Status(http.StatusOK)
+	writer := csv.NewWriter(c.Writer)
+	if err := writer.Write([]string{"id", "event_type", "actor", "status", "risk_score", "environment", "timestamp", "tx_hash"}); err != nil {
+		return
+	}
+	for _, event := range logs {
+		row := []string{csvSafeCell(event.ID), csvSafeCell(event.EventType), csvSafeCell(event.Actor), csvSafeCell(event.Status), csvSafeCell(event.RiskScore), csvSafeCell(event.Environment), event.CreatedAt.UTC().Format(time.RFC3339Nano), csvSafeCell(event.TxHash)}
+		if err := writer.Write(row); err != nil {
+			return
+		}
+	}
+	writer.Flush()
+}
+
+func csvSafeCell(value string) string {
+	trimmed := strings.TrimLeft(value, " \t\r\n")
+	if trimmed != "" && strings.ContainsRune("=+-@", rune(trimmed[0])) {
+		return "'" + value
+	}
+	return value
 }
 
 // TestWebhookPayload simulates a webhook ping and test dispatch

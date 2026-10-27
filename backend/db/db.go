@@ -29,9 +29,19 @@ func Connect() {
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.OTPRecord{},
+		&models.SIWENonce{},
+		&models.OAuthTransaction{},
+		&models.MFAChallenge{},
 		&models.RefreshToken{},
 		&models.Application{},
+		&models.TokenSigningKey{},
+		&models.Organization{},
+		&models.OrganizationMembership{},
+		&models.OrganizationInvitation{},
 		&models.AppUser{},
+		&models.SocialIdentity{},
+		&models.PasskeyCredential{},
+		&models.WebAuthnChallenge{},
 		&models.AuditLog{},
 	); err != nil {
 		log.Fatalf("❌ Database migration failed: %v", err)
